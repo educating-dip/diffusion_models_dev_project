@@ -30,7 +30,7 @@ num_scales = 2000
 ckpt_num = 185
 N = num_scales
 
-root = './samples/CT'
+root = 'samples/CT'
 
 # Parameters for the inverse problem
 sparsity = 6
@@ -56,7 +56,7 @@ freq = 1
 
 if sde.lower() == 'vesde':
     from configs.ve import AAPM_256_ncsnpp_continuous as configs
-    ckpt_filename = f"./checkpoints/{config_name}/checkpoint_{ckpt_num}.pth"
+    ckpt_filename = f"/localdata/AlexanderDenker/checkpoints/{config_name}/checkpoint_{ckpt_num}.pt" 
     config = configs.get_config()
     config.model.num_scales = N
     sde = VESDE(sigma_min=config.model.sigma_min, sigma_max=config.model.sigma_max, N=config.model.num_scales)
