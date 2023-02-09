@@ -9,6 +9,13 @@ import time
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
+def PSNR(original, reco):
+    mse = torch.mean((original - reco) ** 2)
+    if(mse == 0):
+        return 100
+    max_pixel = 1.0
+    psnr = 20 * torch.log10(max_pixel / torch.sqrt(mse))
+    return psnr 
 
 def get_pc_radon_MCG(sde, predictor, corrector, inverse_scaler, snr,
                      n_steps=1, probability_flow=False, continuous=False, weight=1.0,
@@ -85,25 +92,46 @@ def get_pc_radon_MCG(sde, predictor, corrector, inverse_scaler, snr,
     predictor_denoise_update_fn = get_update_fn(predictor_update_fn)
     corrector_radon_update_fn = get_corrector_update_fn(corrector_update_fn)
 
-    def pc_radon(model, data, measurement=None):
-        x = sde.prior_sampling(data.shape).to(data.device)
+    def pc_radon(model, data, measurement=None, start_N=0, save_freq=100):
+        timesteps = torch.linspace(sde.T, eps, sde.N)
 
+        if start_N == 0:
+            x = sde.prior_sampling(data.shape).to(data.device)
+        else: 
+            x_fbp = _AINV(measurement)
+            x_fbp_mean, x_fbp_std = sde.marginal_prob(x_fbp, torch.ones(data.shape[0], device=data.device) * timesteps[start_N])
+            x_fbp_noisy = x_fbp_mean + torch.randn_like(x_fbp) * x_fbp_std[:, None, None, None]
+            x = x_fbp_noisy
+
+            plt.imsave(save_root / 'recon' / f'noisy_fbp_start_point_for_sde.png', clear(x), cmap='gray')
+
+        psnr_list = [] 
         ones = torch.ones_like(x).to(data.device)
         norm_const = _AT(_A(ones))
-        timesteps = torch.linspace(sde.T, eps, sde.N)
-        for i in tqdm(range(sde.N)):
+        for i in tqdm(range(start_N, sde.N)):
             t = timesteps[i]
             x = predictor_denoise_update_fn(model, data, x, t)
             x = corrector_radon_update_fn(model, data, x, t, measurement=measurement, i=i,
                                           norm_const=norm_const)
+
+            with torch.no_grad():
+                psnr = PSNR(inverse_scaler(data), inverse_scaler(x))
+                psnr_list.append(psnr.item())
+                print(psnr.item())
             if save_progress:
-                if (i % 100) == 0:
+                if (i % save_freq) == 0:
                     plt.imsave(save_root / 'recon' / f'progress{i}.png', clear(x), cmap='gray')
 
+        plt.figure()
+        plt.plot(np.arange(start_N+1,sde.N+1), psnr_list)
+        plt.xlabel("iteration")
+        plt.ylabel("PSNR (max pixel=1)")
+        plt.savefig(save_root / 'recon' / f'psnr.png')
+        plt.close()
+            
         return inverse_scaler(x if denoise else x)
 
     return pc_radon
-
 
 def get_pc_radon_song(sde, predictor, corrector, inverse_scaler, snr,
                       n_steps=1, probability_flow=False, continuous=False,
@@ -276,22 +304,10 @@ def get_pc_radon_POCS(sde, predictor, corrector, inverse_scaler, snr,
     return pc_radon
 
 
-def get_pc_colorizer_grad(sde, predictor, corrector, inverse_scaler,
-                          snr, n_steps=1, probability_flow=False, continuous=False,
-                          denoise=True, eps=1e-5, weight=0.1):
-    M = torch.tensor([[5.7735014e-01, -8.1649649e-01, 4.7008697e-08],
-                      [5.7735026e-01, 4.0824834e-01, 7.0710671e-01],
-                      [5.7735026e-01, 4.0824822e-01, -7.0710683e-01]])
-    # `invM` is the inverse transformation of `M`
-    invM = torch.inverse(M)
-
-    # Decouple a gray-scale image with `M`
-    def decouple(inputs):
-        return torch.einsum('bihw,ij->bjhw', inputs, M.to(inputs.device))
-
-    # The inverse function to `decouple`.
-    def couple(inputs):
-        return torch.einsum('bihw,ij->bjhw', inputs, invM.to(inputs.device))
+def get_pc_radon_naive(sde, predictor, corrector, inverse_scaler, snr,
+                     n_steps=1, probability_flow=False, continuous=False, weight=1.0,
+                     denoise=True, eps=1e-5, save_progress=False, save_root=None,
+                     lamb_schedule=None, measurement_noise=False, ray_trafo=None, ray_trafo_adjoint=None, fbp_op=None):
 
     predictor_update_fn = functools.partial(shared_predictor_update_fn,
                                             sde=sde,
@@ -305,58 +321,76 @@ def get_pc_colorizer_grad(sde, predictor, corrector, inverse_scaler,
                                             snr=snr,
                                             n_steps=n_steps)
 
-    def get_colorization_update_fn(update_fn):
-        """Modify update functions of predictor & corrector to incorporate information of gray-scale images."""
+    def get_update_fn(update_fn):
+        def radon_update_fn(model, data, x, t):
+            with torch.no_grad():
+                vec_t = torch.ones(data.shape[0], device=data.device) * t
+                x, _, _ = update_fn(x, vec_t, model=model)
+                return x
 
-        def colorization_update_fn(model, gray_scale_img, x, t):
-            mask = get_mask(x)
-            vec_t = torch.ones(x.shape[0], device=x.device) * t
+        return radon_update_fn
+
+    def get_corrector_update_fn(update_fn):
+        def radon_update_fn(model, data, x, t, measurement=None, i=None, norm_const=None):
+            vec_t = torch.ones(data.shape[0], device=data.device) * t
+
+            # mn True
+            if measurement_noise:
+                measurement_mean, std = sde.marginal_prob(measurement, vec_t)
+                measurement = measurement_mean + torch.randn_like(measurement) * std[:, None, None, None]
 
             # input to the score function
-            x = x.requires_grad_()
             x_next, x_next_mean, score = update_fn(x, vec_t, model=model)
 
-            masked_data_mean, std = sde.marginal_prob(decouple(gray_scale_img), vec_t)
-            masked_data = masked_data_mean + torch.randn_like(x) * std[:, None, None, None]
+            lamb = lamb_schedule.get_current_lambda(i)
 
-            # x0 hat prediction
-            _, bt = sde.marginal_prob(x, vec_t)
-            hatx0 = x + (bt ** 2) * score
+            x_next = x_next + lamb * ray_trafo_adjoint(measurement - ray_trafo(x_next)) / norm_const
 
-            # IGM
-            norm = torch.norm(couple(decouple(hatx0) * mask - masked_data * mask))
-            norm_grad = torch.autograd.grad(outputs=norm, inputs=x)[0]
-            norm_grad = couple(decouple(norm_grad) * (1. - mask)) * weight
+            return x_next
 
-            x_next = couple(decouple(x_next) * (1. - mask) + masked_data * mask - norm_grad)
-            x_next_mean = couple(decouple(x_next_mean) * (1. - mask) + masked_data_mean * mask - norm_grad)
-            x_next = x_next.detach()
-            x_next_mean = x_next_mean.detach()
-            return x_next, x_next_mean
+        return radon_update_fn
 
-        return colorization_update_fn
+    predictor_denoise_update_fn = get_update_fn(predictor_update_fn)
+    corrector_radon_update_fn = get_corrector_update_fn(corrector_update_fn)
 
-    def get_mask(image):
-        mask = torch.cat([torch.ones_like(image[:, :1, ...]),
-                          torch.zeros_like(image[:, 1:, ...])], dim=1)
-        return mask
-
-    predictor_colorize_update_fn = get_colorization_update_fn(predictor_update_fn)
-    corrector_colorize_update_fn = get_colorization_update_fn(corrector_update_fn)
-
-    def pc_colorizer(model, gray_scale_img):
-        shape = gray_scale_img.shape
-        mask = get_mask(gray_scale_img)
-        # Initial sample
-        x = couple(decouple(gray_scale_img) * mask + \
-                   decouple(sde.prior_sampling(shape).to(gray_scale_img.device)
-                            * (1. - mask)))
+    def pc_radon(model, data, measurement=None, start_N=0, save_freq=100):
         timesteps = torch.linspace(sde.T, eps, sde.N)
-        for i in tqdm(range(sde.N)):
+
+        if start_N == 0:
+            x = sde.prior_sampling(data.shape).to(data.device)
+        else: 
+            x_fbp = fbp_op(measurement)
+            x_fbp_mean, x_fbp_std = sde.marginal_prob(x_fbp, torch.ones(data.shape[0], device=data.device) * timesteps[start_N])
+            x_fbp_noisy = x_fbp_mean + torch.randn_like(x_fbp) * x_fbp_std[:, None, None, None]
+            x = x_fbp_noisy
+
+            plt.imsave(save_root / 'recon' / f'noisy_fbp_start_point_for_sde.png', clear(x), cmap='gray')
+
+        psnr_list = [] 
+        ones = torch.ones_like(x).to(data.device)
+        norm_const = ray_trafo_adjoint(ray_trafo(ones))*2
+        print("AT(A(1)): ", norm_const)
+        for i in tqdm(range(start_N, sde.N)):
             t = timesteps[i]
-            x, x_mean = corrector_colorize_update_fn(model, gray_scale_img, x, t)
-            x, x_mean = predictor_colorize_update_fn(model, gray_scale_img, x, t)
+            x = predictor_denoise_update_fn(model, data, x, t)
+            x = corrector_radon_update_fn(model, data, x, t, measurement=measurement, i=i,
+                                          norm_const=norm_const)
 
-        return inverse_scaler(x_mean if denoise else x)
+            with torch.no_grad():
+                psnr = PSNR(inverse_scaler(data), inverse_scaler(x))
+                psnr_list.append(psnr.item())
+                print(psnr.item())
+            if save_progress:
+                if (i % save_freq) == 0:
+                    plt.imsave(save_root / 'recon' / f'progress{i}.png', clear(x), cmap='gray')
 
-    return pc_colorizer
+        plt.figure()
+        plt.plot(np.arange(start_N+1,sde.N+1), psnr_list)
+        plt.xlabel("iteration")
+        plt.ylabel("PSNR (max pixel=1)")
+        plt.savefig(save_root / 'recon' / f'psnr.png')
+        plt.close()
+            
+        return inverse_scaler(x if denoise else x)
+
+    return pc_radon
