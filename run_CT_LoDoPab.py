@@ -42,8 +42,8 @@ random_seed = 0
 #######################
 ### Hyperparameters ###
 #######################
-idx = 29
-rel_noise = 0.0 #0.025
+idx = 400
+rel_noise = 0.025 #0.025
 num_angles = 90
 
 solver = 'naive' #'MCG'
@@ -64,8 +64,11 @@ predictor = ReverseDiffusionPredictor
 corrector = LangevinCorrector
 probability_flow = False # if True, then add no noise during sampling (deterministic sampling)
 
-start_N = 1500 # shortcut (come closer, diffuse faster) start_N = 0 <-> normal sampling
+start_N = 1750 # shortcut (come closer, diffuse faster) start_N = 0 <-> normal sampling
 
+measurement_noise = False # dy defining a SDE we also get a corresponding SGE on y = Ax
+# if measurement_noise = True we take this into account and do the data consistency step with y_k corresponding to noisy x_k
+# dont know if this is good or bad? 
 
 # Specify save directory for saving generated samples
 save_root = Path(f'./results/LoDoPab/num_angles={num_angles}/solver={solver}/start_N={start_N}/rel_noise={rel_noise}/img={idx}')
@@ -88,22 +91,38 @@ lodopab_train = dataset.create_torch_dataset(part='train',
 _, x_gt = lodopab_train[idx]
 x_gt = interpolate(x_gt.unsqueeze(0), (256,256), mode="bilinear", align_corners=True)
 
-domain = uniform_discr([-0.13, -0.13], [0.13, 0.13], (256,256), dtype=np.float32)
+print("Range of x_gt: ", torch.min(x_gt), torch.max(x_gt))
+
+domain = uniform_discr([-128, -128], [128, 128], (256,256), dtype=np.float32)
 geometry = odl.tomo.parallel_beam_geometry(domain, num_angles=num_angles)
 
 ray_trafo = odl.tomo.RayTransform(domain, geometry, impl="astra_cuda")
 
-print("OP NORM: ", power_method_opnorm(ray_trafo))
+norm_const = power_method_opnorm(ray_trafo)
+
+print("OP NORM: ", norm_const)
+print("OP NORM of adjoint: ", power_method_opnorm(ray_trafo.adjoint))
 
 ray_trafo_op = OperatorModule(ray_trafo)
 ray_trafo_adjoint_op = OperatorModule(ray_trafo.adjoint)
-fbp_op = OperatorModule(odl.tomo.analytic.filtered_back_projection.fbp_op(ray_trafo, frequency_scaling=0.75, filter_type='Hann'))
 
+ones = torch.ones(x_gt.shape)
+norm_const_ye = torch.mean(ray_trafo_adjoint_op(ray_trafo_op(ones)))
+
+print("OP NORM YE: ", norm_const_ye)
+
+fbp_op = OperatorModule(odl.tomo.fbp_op(ray_trafo, frequency_scaling=0.95))
 
 y = ray_trafo_op(x_gt)
-y_noise = y + rel_noise*torch.mean(torch.abs(y))*torch.randn_like(y)
+noise_level =  rel_noise*torch.mean(torch.abs(y))
+print("NOISE LEVEL: ", noise_level)
+y_noise = y + noise_level*torch.randn_like(y)
 
 x_fbp = fbp_op(y_noise)
+x_adj = ray_trafo_adjoint_op(y_noise)
+
+print("Range of x_fbp: ", torch.min(x_fbp), torch.max(x_fbp))
+print("Range of x_adj: ", torch.min(x_adj), torch.max(x_adj))
 
 plt.imsave(save_root / 'gt' / f'{str(idx).zfill(4)}_gt.png', clear(x_gt), cmap='gray')
 plt.imsave(save_root / 'gt' / f'{str(idx).zfill(4)}_fbp.png', clear(x_fbp), cmap='gray')
@@ -112,8 +131,8 @@ plt.imsave(save_root / 'gt' / f'{str(idx).zfill(4)}_fbp.png', clear(x_fbp), cmap
 
 # step size for data discrepancy part
 schedule = 'linear'
-start_lamb = 1.0
-end_lamb = 0.9#0.6
+start_lamb = 0.1
+end_lamb = 0.1#0.6
 lamb_schedule = lambda_schedule_linear(start_lamb=start_lamb, end_lamb=end_lamb)
 
 sde = VESDE(sigma_min=config.model.sigma_min, sigma_max=config.model.sigma_max, N=config.model.num_scales)
@@ -176,7 +195,7 @@ elif solver == 'song':
     x = pc_song(score_model, scaler(img), mask, measurement=sinogram_full)
 
 elif solver == 'naive' :
-    
+    """
     pc_naive = controllable_generation.get_pc_radon_naive(sde,
                                                       predictor, corrector,
                                                       inverse_scaler,
@@ -190,10 +209,26 @@ elif solver == 'naive' :
                                                       fbp_op=fbp_op,
                                                       save_progress=True,
                                                       save_root=save_root,
-                                                      lamb_schedule=lamb_schedule)
+                                                      lamb_schedule=lamb_schedule,
+                                                      measurement_noise=measurement_noise,
+                                                      norm_const=norm_const,
+                                                      weight=1/noise_level**2)
 
     x = pc_naive(score_model, scaler(x_gt), measurement=y_noise, start_N=start_N, save_freq=50)
-
+    """
+    sampler_naive = controllable_generation.get_reverse_sampler(sde, 
+                                                                predictor, 
+                                                                inverse_scaler, 
+                                                                probability_flow=probability_flow, 
+                                                                continuous=config.training.continuous, 
+                                                                ray_trafo=ray_trafo_op,
+                                                                ray_trafo_adjoint=ray_trafo_adjoint_op,
+                                                                fbp_op=fbp_op,
+                                                                save_progress=True,
+                                                                save_root=save_root,
+                                                                norm_const=norm_const,
+                                                                weight=1/noise_level**2)
+    x = sampler_naive(score_model, scaler(x_gt), measurement=y_noise, start_N=start_N, save_freq=50)
 
 # Recon
 plt.imsave(str(save_root / 'recon' / f'{str(idx).zfill(4)}.png'), clear(x), cmap='gray')

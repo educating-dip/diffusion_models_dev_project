@@ -307,7 +307,7 @@ def get_pc_radon_POCS(sde, predictor, corrector, inverse_scaler, snr,
 def get_pc_radon_naive(sde, predictor, corrector, inverse_scaler, snr,
                      n_steps=1, probability_flow=False, continuous=False, weight=1.0,
                      denoise=True, eps=1e-5, save_progress=False, save_root=None,
-                     lamb_schedule=None, measurement_noise=False, ray_trafo=None, ray_trafo_adjoint=None, fbp_op=None):
+                     lamb_schedule=None, measurement_noise=False, ray_trafo=None, ray_trafo_adjoint=None, fbp_op=None, norm_const=1.):
 
     predictor_update_fn = functools.partial(shared_predictor_update_fn,
                                             sde=sde,
@@ -322,10 +322,11 @@ def get_pc_radon_naive(sde, predictor, corrector, inverse_scaler, snr,
                                             n_steps=n_steps)
 
     def get_update_fn(update_fn):
-        def radon_update_fn(model, data, x, t):
+        def radon_update_fn(model, data, x, t, measurement=None, norm_const=None):
             with torch.no_grad():
                 vec_t = torch.ones(data.shape[0], device=data.device) * t
-                x, _, _ = update_fn(x, vec_t, model=model)
+                x, x_mean, score = update_fn(x, vec_t, model=model)
+
                 return x
 
         return radon_update_fn
@@ -340,12 +341,23 @@ def get_pc_radon_naive(sde, predictor, corrector, inverse_scaler, snr,
                 measurement = measurement_mean + torch.randn_like(measurement) * std[:, None, None, None]
 
             # input to the score function
+            x = x.requires_grad_()
             x_next, x_next_mean, score = update_fn(x, vec_t, model=model)
 
             lamb = lamb_schedule.get_current_lambda(i)
 
-            x_next = x_next + lamb * ray_trafo_adjoint(measurement - ray_trafo(x_next)) / norm_const
+            # x0 hat estimation
+            _, bt = sde.marginal_prob(x, vec_t)
+            hatx0 = x + (bt ** 2) * score
 
+            norm = torch.norm(ray_trafo_adjoint(measurement - ray_trafo(hatx0)))
+            norm_grad = torch.autograd.grad(outputs=norm, inputs=x)[0]
+
+            x_next = x_next - weight * norm_grad / torch.norm(norm_grad)
+
+            #  \nabla x_t log p_t(y|x_t) is not A^T(A x_t - y), this is only valid for t=0  
+            #x_next = x_next + lamb * fbp_op(measurement - ray_trafo(x_next)) / norm_const
+            #x_next = torch.clamp(x_next, 0, 1)
             return x_next
 
         return radon_update_fn
@@ -361,15 +373,17 @@ def get_pc_radon_naive(sde, predictor, corrector, inverse_scaler, snr,
         else: 
             x_fbp = fbp_op(measurement)
             x_fbp_mean, x_fbp_std = sde.marginal_prob(x_fbp, torch.ones(data.shape[0], device=data.device) * timesteps[start_N])
+            print(x_fbp_std)
             x_fbp_noisy = x_fbp_mean + torch.randn_like(x_fbp) * x_fbp_std[:, None, None, None]
             x = x_fbp_noisy
 
             plt.imsave(save_root / 'recon' / f'noisy_fbp_start_point_for_sde.png', clear(x), cmap='gray')
+            plt.imsave(save_root / 'recon' / f'noisy_fbp_start_point_for_sde_mean.png', clear(x_fbp_mean), cmap='gray')
 
         psnr_list = [] 
-        ones = torch.ones_like(x).to(data.device)
-        norm_const = ray_trafo_adjoint(ray_trafo(ones))*2
-        print("AT(A(1)): ", norm_const)
+        #ones = torch.ones_like(x).to(data.device)
+        #norm_const = ray_trafo_adjoint(ray_trafo(ones))
+
         for i in tqdm(range(start_N, sde.N)):
             t = timesteps[i]
             x = predictor_denoise_update_fn(model, data, x, t)
@@ -392,5 +406,78 @@ def get_pc_radon_naive(sde, predictor, corrector, inverse_scaler, snr,
         plt.close()
             
         return inverse_scaler(x if denoise else x)
+
+    return pc_radon
+
+
+def get_reverse_sampler(sde, sampler, inverse_scaler, probability_flow=False, continuous=False, weight=1.0,
+                    eps=1e-5, save_progress=False, save_root=None, ray_trafo=None, ray_trafo_adjoint=None, fbp_op=None, norm_const=1.):
+
+    predictor_update_fn = functools.partial(shared_predictor_update_fn,
+                                            sde=sde,
+                                            predictor=sampler,
+                                            probability_flow=probability_flow,
+                                            continuous=continuous)
+   
+
+    def get_update_fn(update_fn):
+        def radon_update_fn(model, data, x, t, measurement=None, norm_const=None):
+                vec_t = torch.ones(data.shape[0], device=data.device) * t
+                
+                x = x.requires_grad_()
+                x, x_mean, score = update_fn(x, vec_t, model=model)
+
+                # x0 hat estimation
+                _, bt = sde.marginal_prob(x, vec_t)
+                hatx0 = x + (bt ** 2) * score
+
+                norm = torch.norm(ray_trafo_adjoint(measurement - ray_trafo(hatx0)))
+                norm_grad = torch.autograd.grad(outputs=norm, inputs=x)[0]
+
+                x = x - weight * norm_grad / torch.norm(norm_grad)
+                x = x.detach()
+
+                return x
+
+        return radon_update_fn
+
+
+    predictor_denoise_update_fn = get_update_fn(predictor_update_fn)
+
+    def pc_radon(model, data, measurement=None, start_N=0, save_freq=100):
+        timesteps = torch.linspace(sde.T, eps, sde.N)
+
+        if start_N == 0:
+            x = sde.prior_sampling(data.shape).to(data.device)
+        else: 
+            x_fbp = fbp_op(measurement)
+            x_fbp_mean, x_fbp_std = sde.marginal_prob(x_fbp, torch.ones(data.shape[0], device=data.device) * timesteps[start_N])
+            x_fbp_noisy = x_fbp_mean + torch.randn_like(x_fbp) * x_fbp_std[:, None, None, None]
+            x = x_fbp_noisy
+
+            plt.imsave(save_root / 'recon' / f'noisy_fbp_start_point_for_sde.png', clear(x), cmap='gray')
+            plt.imsave(save_root / 'recon' / f'noisy_fbp_start_point_for_sde_mean.png', clear(x_fbp_mean), cmap='gray')
+
+        psnr_list = [] 
+        for i in tqdm(range(start_N, sde.N)):
+            t = timesteps[i]
+            x = predictor_denoise_update_fn(model, data, x, t, measurement=measurement, norm_const=norm_const)
+
+            with torch.no_grad():
+                psnr = PSNR(inverse_scaler(data), inverse_scaler(x))
+                psnr_list.append(psnr.item())
+                print(psnr.item())
+            if save_progress:
+                if (i % save_freq) == 0:
+                    plt.imsave(save_root / 'recon' / f'progress{i}.png', clear(x), cmap='gray')
+
+        plt.figure()
+        plt.plot(np.arange(start_N+1,sde.N+1), psnr_list)
+        plt.xlabel("iteration")
+        plt.ylabel("PSNR (max pixel=1)")
+        plt.savefig(save_root / 'recon' / f'psnr.png')
+        plt.close()
+            
+        return inverse_scaler(x)
 
     return pc_radon

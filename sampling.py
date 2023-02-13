@@ -197,8 +197,8 @@ class ReverseDiffusionPredictor(Predictor):
     f, G, score = self.rsde.discretize(x, t)
     z = torch.randn_like(x)
     x_mean = x - f
-    x = x_mean + G[:, None, None, None] * z
-    return x, x_mean, score
+    x_new = x_mean + G[:, None, None, None] * z
+    return x_new, x_mean, score # old: x_new, x_mean, score (I added x)
 
 
 @register_predictor(name='ancestral_sampling')

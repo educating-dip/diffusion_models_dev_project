@@ -61,7 +61,7 @@ if sde.lower() == 'vesde':
     config.model.num_scales = N
     sde = VESDE(sigma_min=config.model.sigma_min, sigma_max=config.model.sigma_max, N=config.model.num_scales)
     sde.N = N
-    sampling_eps = 1e-5
+    #sampling_eps = 1e-5 not used in this code
 
 batch_size = 1
 config.training.batch_size = batch_size
@@ -91,10 +91,12 @@ state = dict(step=0, model=score_model, ema=ema)
 state = restore_checkpoint(ckpt_filename, state, config.device, skip_sigma=True, skip_optimizer=True)
 ema.copy_to(score_model.parameters())
 
+start_N = 1980
+rel_noise = 0.02
 idx = 100
 filename = Path(root) / (str(idx).zfill(4) + '.npy')
 # Specify save directory for saving generated samples
-save_root = Path(f'./results/SV-CT/m{180/sparsity}/{idx}/{solver}')
+save_root = Path(f'./results/SV-CT/m{180/sparsity}/{idx}/{solver}/{start_N}/{rel_noise}')
 save_root.mkdir(parents=True, exist_ok=True)
 
 irl_types = ['input', 'recon', 'label']
@@ -120,15 +122,17 @@ mask = torch.zeros([batch_size, 1, det_count, 180]).to(config.device)
 mask[..., ::sparsity] = 1
 
 # Dimension Reducing (DR)
-sinogram = radon.A(img)
+sinogram = radon.A(img) 
+sinogram_noise = sinogram + rel_noise*torch.mean(torch.abs(sinogram))*torch.randn_like(sinogram)
 
 # Dimension Preserving (DP)
 sinogram_full = radon_all.A(img) * mask
-
+breakpoint() 
 # FBP
 fbp = radon.A_dagger(sinogram)
 plt.imsave(str(save_root / 'input' / f'FBP.png'), clear(fbp), cmap='gray')
 if solver == 'MCG':
+
     pc_MCG = controllable_generation.get_pc_radon_MCG(sde,
                                                       predictor, corrector,
                                                       inverse_scaler,
@@ -140,11 +144,12 @@ if solver == 'MCG':
                                                       radon=radon,
                                                       radon_all=radon_all,
                                                       weight=0.1,
-                                                      save_progress=False,
+                                                      save_progress=True,
                                                       save_root=save_root,
                                                       lamb_schedule=lamb_schedule,
                                                       mask=mask)
-    x = pc_MCG(score_model, scaler(img), measurement=sinogram)
+    x = pc_MCG(score_model, scaler(img), measurement=sinogram_noise, start_N=start_N, save_freq=4)
+
 elif solver == 'song':
     pc_song = controllable_generation.get_pc_radon_song(sde,
                                                         predictor, corrector,
