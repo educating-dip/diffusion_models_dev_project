@@ -19,7 +19,15 @@ def get_default_configs():
     training.log_freq = 25
     training.lr = 1e-4
     training.ema_decay = 0.999
-    training.ema_warm_start_steps = 100 # only start updating ema after this amount of steps 
+    training.ema_warm_start_steps = 400 # only start updating ema after this amount of steps 
+
+    # validation configs
+    config.validation = validation = ml_collections.ConfigDict()
+    validation.batch_size = 6
+    validation.snr = 0.05
+    validation.num_steps = 1000
+    validation.eps = 1e-3
+    validation.sample_freq = 4 
 
     # sampling configs 
     config.sampling = sampling = ml_collections.ConfigDict()
@@ -39,11 +47,11 @@ def get_default_configs():
     config.model = model = ml_collections.ConfigDict()
     model.model_name = 'OpenAiUNetModel'
     model.in_channels = 1
-    model.model_channels = 32
+    model.model_channels = 64
     model.out_channels = 1
     model.num_res_blocks = 2
-    model.attention_resolutions = [config.data.im_size // 16, config.data.im_size // 8]
-    model.channel_mult = (1, 2, 4, 8)
+    #model.attention_resolutions = [config.data.im_size // 16, config.data.im_size // 8]
+    model.channel_mult = (0.5, 1, 1, 2, 2, 4, 4)
     model.conv_resample = True
     model.dims = 2
     model.num_heads = 1

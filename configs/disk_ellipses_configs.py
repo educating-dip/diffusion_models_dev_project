@@ -9,7 +9,7 @@ def get_config():
   # data
   data = config.data
   data.name = 'DiskDistributedEllipsesDataset'
-  data.im_size = 501
+  data.im_size = 512 #501
   data.length = 32000
   data.stddev = 0.05
   data.diameter = 0.4745
@@ -23,5 +23,9 @@ def get_config():
 
   config.sampling.load_model_from_path = None
   config.sampling.model_name = None
+
+  # model
+  config.model.attention_resolutions = [config.data.im_size // 16, config.data.im_size // 8]
+
 
   return config
