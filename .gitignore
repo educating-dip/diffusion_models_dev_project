@@ -21,3 +21,6 @@ __pycache__/
 
 exp/
 results/
+
+
+checkpoints/
