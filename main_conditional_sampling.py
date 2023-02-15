@@ -3,68 +3,106 @@ import functools
 import numpy as np 
 import matplotlib.pyplot as plt 
 
-import odl
-from odl import uniform_discr
-from odl.contrib.torch import OperatorModule
-
-from src import (EllipseDatasetFromDival, marginal_prob_std, diffusion_coeff, ScoreNet, pc_sampler)
+from src import (EllipseDatasetFromDival, marginal_prob_std, 
+	diffusion_coeff, OpenAiUNetModel, pc_sampler, simple_trafo, simulate, PSNR, SSIM)
+from configs.ellipses_configs import get_config
 
 def coordinator():
 
-  device = "cuda"
-
+	if cfg.seed is not None:
+		torch.manual_seed(config.seed)  # for reproducible noise in simulate
+	
+	config = get_config()
   marginal_prob_std_fn = functools.partial(
-      marginal_prob_std, 
-      sigma=25
+      marginal_prob_std,
+      sigma=config.sde.sigma
     )
   diffusion_coeff_fn = functools.partial(
       diffusion_coeff, 
-      sigma=25
+      sigma=config.sde.sigma
     )
-  
-  score_model = ScoreNet(marginal_prob_std=marginal_prob_std_fn)
+	
+	# TODO: getter model func and saving/loading funcs
+  score_model = OpenAiUNetModel(
+			image_size = image_size,
+			in_channels = 1,
+			model_channels = 32,
+			out_channels = 1,
+			num_res_blocks = 2,
+			attention_resolutions = [image_size // 16, image_size // 8] ,
+			marginal_prob_std = marginal_prob_std_fn,
+			channel_mult=(1, 2, 4, 8),
+			conv_resample=True,
+			dims=2,
+			num_heads=1,
+			num_head_channels=-1,
+			num_heads_upsample=-1,
+			use_scale_shift_norm=True,
+			resblock_updown=False,
+			use_new_attention_order=False
+	)
   score_model.load_state_dict(
-      torch.load("/home/jleuschn/riccardo/mcg_diffusion_baseline/src/model.pt"))
-  score_model = score_model.to(device)
+      torch.load(os.path.join(config.sampling.load_model_from_path, config.sampling.model_name)))
+  score_model = score_model.to(config.device)
   score_model.eval()
 
-  ellipse_dataset = EllipseDatasetFromDival(impl="astra_cuda")
+	if config.data.name == 'EllipseDatasetFromDival':
+  	ellipse_dataset = EllipseDatasetFromDival(impl="astra_cuda")
+		dataset = ellipse_dataset.get_valloader(
+				batch_size=1,
+				num_data_loader_workers=0
+			)
+	else:
+		raise NotImplementedError
 
-  num_angles = 30
-  domain = uniform_discr([-64, -64], [64, 64], (128,128) , dtype=np.float32)
-  geometry = odl.tomo.parallel_beam_geometry(
-      domain, num_angles=num_angles
-    )
-  ray_trafo = odl.tomo.RayTransform(
-    domain, 
-    geometry, 
-    impl="astra_cuda"
-  )
-  ray_trafo_op = OperatorModule(ray_trafo)
-  ray_trafo_adjoint_op = OperatorModule(ray_trafo.adjoint)
+	if config.forward_op.trafo_name == 'simple_trafo':
+		ray_trafo = simple_trafo(
+									im_size=config.data.im_size, 
+									num_angles=config.forward_op.num_angles
+								)
+	else: 
+		raise NotImplementedError
+	
+	for i, data_sample in enumerate(islice(dataset), config.data.validation.num_images):
 
-  # TODO : 
-  train_dl = ellipse_dataset.get_trainloader(batch_size=1, num_data_loader_workers=0)
-  _, x_gt = next(iter(train_dl))
-  x_gt = x_gt.to(device)
+		if len(data_sample) == 2 and config.data.name == 'EllipseDatasetFromDival': 
+			
+			_, ground_truth = data_sample
+			ground_truth = ground_truth.to(device=config.device)
+			observation, noise_level = simulate(
+					ground_truth,
+					ray_trafo['ray_trafo_module'],
+					white_noise_rel_stddev=config.data.stddev
+			)
+		
+		elif len(data_sample) == 3:
 
-  y = ray_trafo_op(x_gt)
-  rho = 0.05*torch.mean(torch.abs(y))
-  y_noise = y + rho*torch.randn_like(y).to(device)
+			observation, ground_truth, _ = data_sample
+			ground_truth = ground_truth.to(device=config.device)
+			observation = observation.to(device=config.device)
 
-  img_size = (1, 128, 128)
-  signal_to_noise_ratio = 0.05
-  ## The number of sampling steps.
-  num_steps = 3000
+  if config.sampling.sampling_strategy == 'predictor_corrector':
 
-  x_mean = pc_sampler(score_model=score_model, marginal_prob_std=marginal_prob_std_fn, ray_trafo_op=ray_trafo_op, 
-      ray_trafo_adjoint_op=ray_trafo_adjoint_op, diffusion_coeff=diffusion_coeff_fn, y_noise=y_noise, rho=rho, 
-      batch_size=64, num_steps=num_steps, snr=signal_to_noise_ratio, device=device, eps=1e-3) 
+    x_mean = pc_sampler(score_model=score_model, marginal_prob_std=marginal_prob_std_fn, ray_trafo=ray_trafo, 
+				diffusion_coeff=diffusion_coeff_fn, observation=observation, noise_level=noise_level, img_shape=x.shape[1:],
+        	batch_size=config.sampling.batch_size, num_steps=config.sampling.num_steps, snr=config.sampling.snr, device=config.device, eps=config.sampling.eps) 
+	else: 
+		raise NotImplementedError
 
-  fig, (ax1, ax2) = plt.subplots(1,2)
-  ax1.imshow(x_mean[0,0,:,:].cpu(), cmap="gray")
-  ax2.imshow(x_gt[0,0,:,:].cpu(), cmap="gray")
-  fig.savefig('test.png')
+	torch.save(
+		{'recon': x_mean.cpu().squeeze(),
+		'ground_truth': ground_truth.cpu().squeeze()}, 
+		f'recon_{i}_info.pt'
+		)
+		
+	print(f'reconstruction of sample {i}')
+	print('PSNR:', PSNR(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy()))
+	print('SSIM:', SSIM(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy()))
+
+	fig, (ax1, ax2) = plt.subplots(1,2)
+	ax1.imshow(x_mean[0,0,:,:].cpu(), cmap="gray")
+	ax2.imshow(x_gt[0,0,:,:].cpu(), cmap="gray")
+	fig.savefig(f'recon_{i}.png')
 
 if __name__ == '__main__':
   coordinator()

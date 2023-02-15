@@ -1,1 +1,1 @@
-from .openai_unet import UNetModel
+from .openai_unet import OpenAiUNetModel

@@ -5,10 +5,10 @@ from tqdm import tqdm
 def pc_sampler(score_model, 
                 marginal_prob_std,
                 diffusion_coeff,
-                y_noise,
-                rho,
-                ray_trafo_op,
-                ray_trafo_adjoint_op,
+                observation,
+                noise_level,
+                ray_trafo,
+                img_shape,
                 batch_size, 
                 num_steps, 
                 snr,                
@@ -16,7 +16,7 @@ def pc_sampler(score_model,
                 eps=1e-3):
 
     t = torch.ones(batch_size, device=device)
-    init_x = torch.randn(batch_size, 1, 128, 128, device=device) * marginal_prob_std(t)[:, None, None, None]
+    init_x = torch.randn(batch_size, *img_shape, device=device) * marginal_prob_std(t)[:, None, None, None]
     time_steps = np.linspace(1., eps, num_steps)
     step_size = time_steps[0] - time_steps[1]
 
@@ -37,12 +37,12 @@ def pc_sampler(score_model,
       s = score_model(x, batch_time_step)
       std = marginal_prob_std(batch_time_step)
       xhat0 = x + s * std[:, None, None, None]
-      norm = torch.linalg.norm(ray_trafo_adjoint_op(y_noise - ray_trafo_op(xhat0)))
+      norm = torch.linalg.norm(ray_trafo['ray_trafo_adjoint_module'](observation - ray_trafo['ray_trafo_module'](xhat0)))
       norm_grad = torch.autograd.grad(outputs=norm, inputs=x)[0]
 
       # Predictor step (Euler-Maruyama)
       g = diffusion_coeff(batch_time_step)
-      x_mean = x + (g**2)[:, None, None, None] * (s - 1/rho**2 * norm_grad) * step_size
+      x_mean = x + (g**2)[:, None, None, None] * (s - 1/noise_level**2 * norm_grad) * step_size
       x = x_mean + torch.sqrt(g**2 * step_size)[:, None, None, None] * torch.randn_like(x)      
 
       x = x.detach()
