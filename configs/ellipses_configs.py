@@ -12,7 +12,7 @@ def get_config():
   data.im_size = 128
   data.stddev = 0.05
   data.validation = validation = ml_collections.ConfigDict()
-  validation.num_images
+  validation.num_images = 10
 
   # forward operator
   forward_op = config.forward_op
