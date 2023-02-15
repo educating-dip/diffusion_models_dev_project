@@ -8,13 +8,15 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim import Adam
 
-from src import loss_fn, ExponentialMovingAverage, marginal_prob_std, diffusion_coeff, ScoreNet, EllipseDatasetFromDival
+from src import loss_fn, ExponentialMovingAverage, marginal_prob_std, diffusion_coeff, UNetModel, EllipseDatasetFromDival
+from configs.ellipses_configs import get_config
 
 def coordinator():
+  config = get_config()
 
   # TODO:
   device = "cuda"
-  batch_size = 32
+  batch_size = 6
   n_epochs =   50
   lr=1e-4
 
@@ -23,7 +25,25 @@ def coordinator():
 
   ellipse_dataset = EllipseDatasetFromDival(impl="astra_cuda")
   train_dl = ellipse_dataset.get_trainloader(batch_size=batch_size, num_data_loader_workers=0)
-  score_model = ScoreNet(marginal_prob_std=marginal_prob_std_fn)
+
+  image_size = 128
+  score_model = UNetModel(image_size = image_size,
+                  in_channels = 1,
+                  model_channels = 32,
+                  out_channels = 1,
+                  num_res_blocks = 2,
+                  attention_resolutions = [image_size // 16, image_size // 8] ,
+                  marginal_prob_std = marginal_prob_std_fn,
+                  channel_mult=(1, 2, 4, 8),
+                  conv_resample=True,
+                  dims=2,
+                  num_heads=1,
+                  num_head_channels=-1,
+                  num_heads_upsample=-1,
+                  use_scale_shift_norm=True,
+                  resblock_updown=False,
+                  use_new_attention_order=False)
+  print("#Parameters: ", sum([p.numel() for p in score_model.parameters()]))
   score_model = score_model.to(device)
   ema = ExponentialMovingAverage(score_model.parameters(), decay=0.999)
   
