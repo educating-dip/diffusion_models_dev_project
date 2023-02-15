@@ -11,7 +11,6 @@ from itertools import repeat
 from odl import uniform_discr
 from odl.phantom import ellipsoid_phantom
 from src.physics import SimulatedDataset
-from subspace_dip.data.trafo.base_ray_trafo import BaseRayTrafo
 
 class EllipsesDataset(torch.utils.data.IterableDataset):
     """

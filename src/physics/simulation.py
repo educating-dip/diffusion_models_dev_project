@@ -7,12 +7,14 @@ import torch
 import numpy as np 
 from torch import Tensor
 
+from typing import Union, Sequence, Iterable, Optional, Any, Tuple, Iterator
+
 def simulate(x: Tensor, ray_trafo, white_noise_rel_stddev: float, rng  = None, return_noise_level: bool = False):
 
     observation = ray_trafo(x)
 
     if rng is None:
-        rng = np.random.default_rng()+
+        rng = np.random.default_rng()
     
     noise_level = white_noise_rel_stddev * torch.mean(torch.abs(observation)).item()
     noise = torch.from_numpy(rng.normal(
@@ -28,7 +30,7 @@ class SimulatedDataset(torch.utils.data.Dataset):
 
     def __init__(self,
             image_dataset: Union[Sequence[Tensor], Iterable[Tensor]],
-            ray_trafo: BaseRayTrafo,
+            ray_trafo,
             white_noise_rel_stddev: float,
             use_fixed_seeds_starting_from: Optional[int] = 1,
             rng: Optional[np.random.Generator] = None,
