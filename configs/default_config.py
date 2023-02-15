@@ -3,7 +3,7 @@ import ml_collections
 
 
 
-def get_default_config():
+def get_default_configs():
     config = ml_collections.ConfigDict()
 
     config.device = "cuda"
