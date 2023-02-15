@@ -1,82 +1,90 @@
+import os
 import torch 
 import functools 
 import numpy as np 
 import matplotlib.pyplot as plt 
 import numpy as np 
 
-from tqdm import tqdm 
-from torch.utils.tensorboard import SummaryWriter
-from torch.optim import Adam
 
-from src import loss_fn, ExponentialMovingAverage, marginal_prob_std, diffusion_coeff, OpenAiUNetModel, EllipseDatasetFromDival
+
+from src import (loss_fn, ExponentialMovingAverage, marginal_prob_std, diffusion_coeff, 
+  OpenAiUNetModel, EllipseDatasetFromDival, get_disk_dist_ellipses_dataset)
+
+
 from configs.ellipses_configs import get_config
 
 def coordinator():
+
   config = get_config()
+  marginal_prob_std_fn = functools.partial(
+      marginal_prob_std, 
+      sigma=config.sde.sigma
+    )
+  diffusion_coeff_fn = functools.partial(
+      diffusion_coeff, 
+      sigma=config.sde.sigma
+    )
 
-  marginal_prob_std_fn = functools.partial(marginal_prob_std, sigma=config.sde.sigma)
-  diffusion_coeff_fn = functools.partial(diffusion_coeff, sigma=config.sde.sigma)
+  if config.traning.dataset_name == 'EllipseDatasetFromDival':
+    
+    ellipse_dataset = EllipseDatasetFromDival(
+        impl="astra_cuda"
+      )
+    train_dl = ellipse_dataset.get_trainloader(
+        batch_size=config.training.batch_size, 
+        num_data_loader_workers=0
+      )
 
-  ellipse_dataset = EllipseDatasetFromDival(impl="astra_cuda")
-  train_dl = ellipse_dataset.get_trainloader(batch_size=config.training.batch_size, num_data_loader_workers=0)
+  elif config.traning.dataset_name == 'DiskDistributedEllipsesDataset':
+    
+    train_dl = get_disk_dist_ellipses_dataset(
+            fold='train', 
+            im_size=config.data.im_size, 
+            length=config.data.length,
+            diameter=config.data.diameter,
+            device=config.device
+          )
 
-  image_size = 512 #128
-  score_model = OpenAiUNetModel(image_size = image_size,
-                  in_channels = 1,
-                  model_channels = 32,
-                  out_channels = 1,
-                  num_res_blocks = 2,
-                  attention_resolutions = [image_size // 16, image_size // 8] ,
-                  marginal_prob_std = marginal_prob_std_fn,
-                  channel_mult=(1, 2, 4, 8),
-                  conv_resample=True,
-                  dims=2,
-                  num_heads=1,
-                  num_head_channels=-1,
-                  num_heads_upsample=-1,
-                  use_scale_shift_norm=True,
-                  resblock_updown=False,
-                  use_new_attention_order=False)
+  if config.model.model_name == 'OpenAiUNetModel': 
+
+    score_model = OpenAiUNetModel(
+                    image_size=config.data.im_size,
+                    in_channels=config.model.in_channels,
+                    model_channels=config.model,
+                    out_channels=config.model,
+                    num_res_blocks=config.model,
+                    attention_resolutions=config.model,
+                    marginal_prob_std=marginal_prob_std_fn,
+                    channel_mult=config.model,
+                    conv_resample=config.model,
+                    dims=config.model,
+                    num_heads=config.model,
+                    num_head_channels=config.model,
+                    num_heads_upsample=config.model,
+                    use_scale_shift_norm=config.model,
+                    resblock_updown=config.model,
+                    use_new_attention_order=config.model
+                    )
+  else:
+
+    raise NotImplementedError 
                   
-  print("#Parameters: ", sum([p.numel() for p in score_model.parameters()]))
-  score_model = score_model.to(config.device)
-  
-  # TODO: 
-  writer = SummaryWriter(log_dir="checkpoints", comment ="Training")
-  optimizer = Adam(score_model.parameters(), lr=config.training.lr)
+  print(f" # Parameters: {sum([p.numel() for p in score_model.parameters()]) }")
 
-  for epoch in range(config.training.n_epochs):
-    avg_loss = 0.
-    num_items = 0
+  score_model_simple_trainer(
+    score_model=score_model.to(config.device),
+    marginal_prob_std_fn=marginal_prob_std_fn,
+    train_dl=train_dl,
+    optim_kwargs={
+        'n_epochs': config.training.n_epochs,
+        'lr': config.training.lr,
+        'ema_warm_start_steps': config.training.ema_warm_start_steps,
+        'log_freq': config.training.log_freq,
+      },
+    device=config.device,
+    log_dir='./'
+  )
 
-    for idx, batch in tqdm(enumerate(train_dl), total = len(train_dl)):
-      _, x = batch
-      x = torch.randn(x.shape[0], 1, 512, 512)
-      x = x.to(config.device)
-
-      loss = loss_fn(score_model, x, marginal_prob_std_fn)
-      optimizer.zero_grad()
-      loss.backward()    
-      optimizer.step()
-      avg_loss += loss.item() * x.shape[0]
-      num_items += x.shape[0]
-
-      if idx % config.training.log_freq == 0:
-        writer.add_scalar("train/loss", loss.item(), epoch*len(train_dl) + idx) 
-
-      if epoch == 0 and idx == config.training.ema_warm_start_steps: 
-        ema = ExponentialMovingAverage(score_model.parameters(), decay=0.999)
-
-      if idx > config.training.ema_warm_start_steps or epoch > 0:
-        ema.update(score_model.parameters())
-    
-    # Print the averaged training loss so far.
-    print('Average Loss: {:5f}'.format(avg_loss / num_items))
-    writer.add_scalar("train/mean_loss_per_epoch", avg_loss / num_items, epoch + 1) 
-    
-    # Update the checkpoint after each epoch of training.
-    torch.save(score_model.state_dict(), 'checkpoints/model.pt')
-    torch.save(ema.state_dict(), 'checkpoints/ema_model.pt')
 
 if __name__ == '__main__': 
   coordinator()

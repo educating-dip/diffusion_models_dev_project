@@ -1,3 +1,4 @@
+import os
 import torch 
 import functools 
 import numpy as np 
@@ -23,24 +24,29 @@ def coordinator():
     )
 	
 	# TODO: getter model func and saving/loading funcs
-  score_model = OpenAiUNetModel(
-			image_size = image_size,
-			in_channels = 1,
-			model_channels = 32,
-			out_channels = 1,
-			num_res_blocks = 2,
-			attention_resolutions = [image_size // 16, image_size // 8] ,
-			marginal_prob_std = marginal_prob_std_fn,
-			channel_mult=(1, 2, 4, 8),
-			conv_resample=True,
-			dims=2,
-			num_heads=1,
-			num_head_channels=-1,
-			num_heads_upsample=-1,
-			use_scale_shift_norm=True,
-			resblock_updown=False,
-			use_new_attention_order=False
-	)
+  if config.model.model_name == 'OpenAiUNetModel':
+
+    score_model = OpenAiUNetModel(image_size = config.data.im_size,
+                    in_channels = config.model.in_channels,
+                    model_channels = config.model,
+                    out_channels = config.model,
+                    num_res_blocks = config.model,
+                    attention_resolutions = config.model ,
+                    marginal_prob_std = marginal_prob_std_fn,
+                    channel_mult= config.model,
+                    conv_resample= config.model,
+                    dims= config.model,
+                    num_heads= config.model,
+                    num_head_channels= config.model,
+                    num_heads_upsample= config.model,
+                    use_scale_shift_norm=config.model,
+                    resblock_updown=config.model,
+                    use_new_attention_order=config.model)
+	else:
+		
+		raise NotImplementedError
+
+
   score_model.load_state_dict(
       torch.load(os.path.join(config.sampling.load_model_from_path, config.sampling.model_name)))
   score_model = score_model.to(config.device)
@@ -83,10 +89,23 @@ def coordinator():
 
   if config.sampling.sampling_strategy == 'predictor_corrector':
 
-    x_mean = pc_sampler(score_model=score_model, marginal_prob_std=marginal_prob_std_fn, ray_trafo=ray_trafo, 
-				diffusion_coeff=diffusion_coeff_fn, observation=observation, noise_level=noise_level, img_shape=x.shape[1:],
-        	batch_size=config.sampling.batch_size, num_steps=config.sampling.num_steps, snr=config.sampling.snr, device=config.device, eps=config.sampling.eps) 
-	else: 
+    x_mean = pc_sampler(
+					score_model=score_model, 
+					marginal_prob_std=marginal_prob_std_fn, 
+					ray_trafo=ray_trafo, 
+					diffusion_coeff=diffusion_coeff_fn, 
+					observation=observation, 
+					noise_level=noise_level, 
+					img_shape=x.shape[1:],
+					batch_size=config.sampling.batch_size, 
+					num_steps=config.sampling.num_steps, 
+					snr=config.sampling.snr, 
+					device=config.device, 
+					eps=config.sampling.eps
+			)
+
+	else:
+		 
 		raise NotImplementedError
 
 	torch.save(

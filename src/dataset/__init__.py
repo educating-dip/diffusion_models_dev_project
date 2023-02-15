@@ -1,1 +1,2 @@
-from .ellipses import EllipseDatasetFromDival
+from .ellipses_dival import EllipseDatasetFromDival
+from .ellipses import EllipsesDataset, get_ellipses_dataset, DiskDistributedEllipsesDataset, get_disk_dist_ellipses_dataset

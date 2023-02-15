@@ -10,4 +10,8 @@ def get_config():
   # forward operator
   forward_op = config.forward_op
 
+  # model
+  config.model.model_name = 'OpenAiUNetModel'
+
+
   return config
