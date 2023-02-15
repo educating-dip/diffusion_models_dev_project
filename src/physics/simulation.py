@@ -2,8 +2,8 @@ import torch
 import numpy as np 
 from torch import Tensor
 
-def simulate(x: Tensor, ray_trafo: BaseRayTrafo, white_noise_rel_stddev: float,
-        rng: Optional[np.random.Generator] = None):
+def simulate(x: Tensor, ray_trafo, white_noise_rel_stddev: float,
+        rng  = None):
 
     observation = ray_trafo(x)
     if rng is None:

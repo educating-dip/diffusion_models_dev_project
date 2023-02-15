@@ -14,18 +14,13 @@ from configs.ellipses_configs import get_config
 def coordinator():
   config = get_config()
 
-  # TODO:
-  batch_size = 6
-  n_epochs =   50
-  lr=1e-4
-
   marginal_prob_std_fn = functools.partial(marginal_prob_std, sigma=config.sde.sigma)
   diffusion_coeff_fn = functools.partial(diffusion_coeff, sigma=config.sde.sigma)
 
   ellipse_dataset = EllipseDatasetFromDival(impl="astra_cuda")
   train_dl = ellipse_dataset.get_trainloader(batch_size=config.training.batch_size, num_data_loader_workers=0)
 
-  image_size = 128
+  image_size = 512 #128
   score_model = OpenAiUNetModel(image_size = image_size,
                   in_channels = 1,
                   model_channels = 32,
@@ -42,22 +37,23 @@ def coordinator():
                   use_scale_shift_norm=True,
                   resblock_updown=False,
                   use_new_attention_order=False)
+                  
   print("#Parameters: ", sum([p.numel() for p in score_model.parameters()]))
   score_model = score_model.to(config.device)
-  ema = ExponentialMovingAverage(score_model.parameters(), decay=0.999)
   
   # TODO: 
   writer = SummaryWriter(log_dir="checkpoints", comment ="Training")
-  optimizer = Adam(score_model.parameters(), lr=lr)
-  write_every = 15 
+  optimizer = Adam(score_model.parameters(), lr=config.training.lr)
 
-  for epoch in range(n_epochs):
+  for epoch in range(config.training.n_epochs):
     avg_loss = 0.
     num_items = 0
 
     for idx, batch in tqdm(enumerate(train_dl), total = len(train_dl)):
       _, x = batch
+      x = torch.randn(x.shape[0], 1, 512, 512)
       x = x.to(config.device)
+
       loss = loss_fn(score_model, x, marginal_prob_std_fn)
       optimizer.zero_grad()
       loss.backward()    
@@ -65,10 +61,15 @@ def coordinator():
       avg_loss += loss.item() * x.shape[0]
       num_items += x.shape[0]
 
-      if idx % write_every == 0:
+      if idx % config.training.log_freq == 0:
         writer.add_scalar("train/loss", loss.item(), epoch*len(train_dl) + idx) 
 
-      ema.update(score_model.parameters())
+      if epoch == 0 and idx == config.training.ema_warm_start_steps: 
+        ema = ExponentialMovingAverage(score_model.parameters(), decay=0.999)
+
+      if idx > config.training.ema_warm_start_steps or epoch > 0:
+        ema.update(score_model.parameters())
+    
     # Print the averaged training loss so far.
     print('Average Loss: {:5f}'.format(avg_loss / num_items))
     writer.add_scalar("train/mean_loss_per_epoch", avg_loss / num_items, epoch + 1) 

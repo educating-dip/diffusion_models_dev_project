@@ -19,6 +19,7 @@ def get_default_configs():
     training.log_freq = 25
     training.lr = 1e-4
     training.ema_decay = 0.999
+    training.ema_warm_start_steps = 100 # only start updating ema after this amount of steps 
 
     # sampling configs 
     config.sampling = sampling = ml_collections.ConfigDict()
