@@ -1,1 +1,1 @@
-from .simple_model import ScoreNet
+from .openai_unet import UNetModel
