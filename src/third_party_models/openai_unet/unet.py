@@ -136,6 +136,30 @@ class Downsample(nn.Module):
         return self.op(x)
 
 
+class Concat(nn.Module):
+    def __init__(self):
+        super(Concat, self).__init__()
+
+    def forward(self, *inputs):
+        inputs_shapes2 = [x.shape[2] for x in inputs]
+        inputs_shapes3 = [x.shape[3] for x in inputs]
+
+        if (np.all(np.array(inputs_shapes2) == min(inputs_shapes2)) and
+                np.all(np.array(inputs_shapes3) == min(inputs_shapes3))):
+            inputs_ = inputs
+        else:
+            target_shape2 = min(inputs_shapes2)
+            target_shape3 = min(inputs_shapes3)
+
+            inputs_ = []
+            for inp in inputs:
+                diff2 = (inp.size(2) - target_shape2) // 2
+                diff3 = (inp.size(3) - target_shape3) // 2
+                inputs_.append(inp[:, :, diff2: diff2 + target_shape2,
+                                   diff3:diff3 + target_shape3])
+        return th.cat(inputs_, dim=1)
+
+
 class ResBlock(TimestepBlock):
     """
     A residual block that can optionally change the number of channels.
@@ -182,6 +206,7 @@ class ResBlock(TimestepBlock):
         elif down:
             self.h_upd = Downsample(channels, False, dims)
             self.x_upd = Downsample(channels, False, dims)
+
         else:
             self.h_upd = self.x_upd = nn.Identity()
 
@@ -408,6 +433,8 @@ class OpenAiUNetModel(nn.Module):
         self.num_head_channels = num_head_channels
         self.num_heads_upsample = num_heads_upsample
 
+        self.concat = Concat()
+
         self.marginal_prob_std = marginal_prob_std
 
         time_embed_dim = model_channels * 4
@@ -556,9 +583,12 @@ class OpenAiUNetModel(nn.Module):
         for module in self.input_blocks:
             h = module(h, emb)
             hs.append(h)
+            print("DOWM BLOCK: ", h.shape)
         h = self.middle_block(h, emb)
         for module in self.output_blocks:
-            h = th.cat([h, hs.pop()], dim=1)
+            print("UP BLOCKS: ", h.shape, hs[-1].shape)
+            #h = th.cat([h, hs.pop()], dim=1)
+            h = self.concat(h, hs.pop())
             h = module(h, emb)
         h = h.type(x.dtype)
         h = self.out(h)
