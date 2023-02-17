@@ -67,7 +67,8 @@ def coordinator():
 							num_angles=config.forward_op.num_angles
 		)
 	if config.forward_op.trafo_name == 'walnut_trafo':
-			ray_trafo = get_walnut_2d_ray_trafo(
+			ray_trafo = {}
+			ray_trafo_obj = get_walnut_2d_ray_trafo(
 									data_path=config.data.data_path,
 									matrix_path=config.data.data_path,
 									walnut_id=config.data.walnut_id,
@@ -75,6 +76,8 @@ def coordinator():
 									angular_sub_sampling=config.forward_op.angular_sub_sampling,
 									proj_col_sub_sampling=config.forward_op.proj_col_sub_sampling
 			)
+			ray_trafo_obj = ray_trafo_obj.to(device=config.device)
+			ray_trafo['ray_trafo_module'] = ray_trafo_obj
 	else: 
 		raise NotImplementedError
 
@@ -87,7 +90,7 @@ def coordinator():
 		)
 			
 	if config.data.name == 'Walnut':
-		dataset = get_walnut_data_on_device(config, ray_trafo)
+		dataset = get_walnut_data_on_device(config, ray_trafo_obj)
 	else:
 		raise NotImplementedError
 
@@ -119,7 +122,7 @@ def coordinator():
 							diffusion_coeff=diffusion_coeff_fn, 
 							observation=observation, 
 							penalty=1., 
-							img_shape=x.shape[1:],
+							img_shape=ground_truth.shape[1:],
 							batch_size=config.sampling.batch_size, 
 							num_steps=config.sampling.num_steps, 
 							snr=config.sampling.snr, 

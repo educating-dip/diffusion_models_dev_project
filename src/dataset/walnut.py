@@ -187,7 +187,7 @@ def get_walnut_data_on_device(config, ray_trafo):
             noisy_observation[None].to(device=config.device))[0].to(device=config.device)
     
 		return torch.utils.data.TensorDataset(  # include batch dims
-            noisy_observation[None], ground_truth[None], filtbackproj[None])
+            noisy_observation[None, None], ground_truth[None, None], filtbackproj[None, None])
 		
 
 		 
