@@ -10,6 +10,7 @@ from torch import Tensor
 from itertools import repeat
 from odl import uniform_discr
 from odl.phantom import ellipsoid_phantom
+
 from src.physics import SimulatedDataset
 
 class EllipsesDataset(torch.utils.data.IterableDataset):

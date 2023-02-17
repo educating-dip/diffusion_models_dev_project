@@ -3,6 +3,7 @@ import torch
 import functools
 import numpy as np 
 import matplotlib.pyplot as plt 
+from itertools import islice
 
 from itertools import islice
 from src import (marginal_prob_std, diffusion_coeff, OpenAiUNetModel,
@@ -10,6 +11,7 @@ from src import (marginal_prob_std, diffusion_coeff, OpenAiUNetModel,
 from configs.walnut_configs import get_config
 
 def coordinator():
+	config = get_config()
 
 	config = get_config()
 

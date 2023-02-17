@@ -27,5 +27,5 @@ def simple_trafo(
 	ray_trafo['ray_trafo'] = ray_trafo_op
 	ray_trafo['ray_trafo_module'] = ray_trafo_op_module
 	ray_trafo['ray_trafo_adjoint_module'] = ray_trafo_adjoint_op_module
-
+	ray_trafo['fbp_module'] = OperatorModule(odl.tomo.analytic.filtered_back_projection.fbp_op(ray_trafo_op, frequency_scaling=0.75, filter_type='Hann'))
 	return ray_trafo

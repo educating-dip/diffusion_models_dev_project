@@ -3,6 +3,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim import Adam
 import torchvision
+import os 
 
 from .losses import loss_fn
 from .ema import ExponentialMovingAverage
@@ -63,10 +64,10 @@ def score_model_simple_trainer(
 		print('Average Loss: {:5f}'.format(avg_loss / num_items))
 		writer.add_scalar("train/mean_loss_per_epoch", avg_loss / num_items, epoch + 1)
 		
-		torch.save(score_model.state_dict(), 'model.pt')
-		torch.save(ema.state_dict(), 'ema_model.pt')
+		torch.save(score_model.state_dict(), os.path.join(log_dir,'model.pt'))
+		torch.save(ema.state_dict(), os.path.join(log_dir, 'ema_model.pt'))
 
-		if val_kwargs["sample_freq"] % epoch == 0:
+		if val_kwargs["sample_freq"] % (epoch + 1) == 0:
 			score_model.eval()
 			with torch.no_grad():
 				x_mean = pc_sampler_unconditional(

@@ -583,10 +583,8 @@ class OpenAiUNetModel(nn.Module):
         for module in self.input_blocks:
             h = module(h, emb)
             hs.append(h)
-            print("DOWM BLOCK: ", h.shape)
         h = self.middle_block(h, emb)
         for module in self.output_blocks:
-            print("UP BLOCKS: ", h.shape, hs[-1].shape)
             #h = th.cat([h, hs.pop()], dim=1)
             h = self.concat(h, hs.pop())
             h = module(h, emb)

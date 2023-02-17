@@ -33,10 +33,11 @@ def get_default_configs():
     config.sampling = sampling = ml_collections.ConfigDict()
     sampling.batch_size = 1
     sampling.snr = 0.05
-    sampling.num_steps = 2000
+    sampling.num_steps = 2000 #2000
     sampling.eps = 1e-3
     sampling.sampling_strategy = "predictor_corrector"
-
+    sampling.start_time_step = 0
+    
     # data configs - specify in other configs
     config.data = ml_collections.ConfigDict()
 

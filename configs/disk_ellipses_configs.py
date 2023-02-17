@@ -27,5 +27,4 @@ def get_config():
   # model
   config.model.attention_resolutions = [config.data.im_size // 16, config.data.im_size // 8]
 
-
   return config
