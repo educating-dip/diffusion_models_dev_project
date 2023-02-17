@@ -88,8 +88,20 @@ def coordinator():
 					batch_size=1,
 					num_data_loader_workers=0
 		)
+
+  	elif config.data.name == 'DiskDistributedEllipsesDataset':
+    
+		dataset = get_disk_dist_ellipses_dataset(
+				fold='test', 
+				im_size=config.data.im_size, 
+				length=config.data.val_length,
+				diameter=config.data.diameter,
+				max_n_ellipse=config.data.num_n_ellipse, 
+				device=config.device
+			)
 			
-	if config.data.name == 'Walnut':
+	elif config.data.name == 'Walnut':
+
 		dataset = get_walnut_data_on_device(config, ray_trafo_obj)
 	else:
 		raise NotImplementedError

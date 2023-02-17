@@ -43,6 +43,7 @@ def coordinator():
             im_size=config.data.im_size, 
             length=config.data.length,
             diameter=config.data.diameter,
+            max_n_ellipse=config.data.num_n_ellipse, 
             device=config.device
           )
 

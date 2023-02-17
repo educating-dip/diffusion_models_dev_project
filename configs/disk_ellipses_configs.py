@@ -11,8 +11,10 @@ def get_config():
   data.name = 'DiskDistributedEllipsesDataset'
   data.im_size = 501
   data.length = 32000
+  data.val_length = 32
   data.stddev = 0.05
   data.diameter = 0.4745
+  data.num_n_ellipse = 70
   data.validation = validation = ml_collections.ConfigDict()
   validation.num_images = 10
 

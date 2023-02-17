@@ -114,25 +114,25 @@ class DiskDistributedEllipsesDataset(EllipsesDataset):
             length : int = 3200, 
             fixed_seed : int = 1, 
             fold : str = 'train', 
-            diameter: float = 0.4745
+            diameter: float = 0.4745, 
+            max_n_ellipse : int = 70
             ):
         super().__init__(shape=shape, length=length, fixed_seed=fixed_seed, fold=fold)
         self.diameter = diameter
     
     def _extend_ellipses_data(self, min_length: int) -> None:
-        max_n_ellipse = 70
-        ellipsoids = np.empty((max_n_ellipse, 6))
+        ellipsoids = np.empty((self.max_n_ellipse, 6))
         n_to_generate = max(min_length - len(self.ellipses_data), 0)
         for _ in range(n_to_generate):
-            v = (self.rng.uniform(-0.4, 1.0, (max_n_ellipse,)))
-            a1 = .2 * self.diameter * self.rng.exponential(1., (max_n_ellipse,))
-            a2 = .2 * self.diameter * self.rng.exponential(1., (max_n_ellipse,))
-            c_r = self.rng.triangular(0., self.diameter, self.diameter, size=(max_n_ellipse,))
-            c_a = self.rng.uniform(0., 2 * np.pi, (max_n_ellipse,))
+            v = (self.rng.uniform(-0.4, 1.0, (self.max_n_ellipse,)))
+            a1 = .2 * self.diameter * self.rng.exponential(1., (self.max_n_ellipse,))
+            a2 = .2 * self.diameter * self.rng.exponential(1., (self.max_n_ellipse,))
+            c_r = self.rng.triangular(0., self.diameter, self.diameter, size=(self.max_n_ellipse,))
+            c_a = self.rng.uniform(0., 2 * np.pi, (self.max_n_ellipse,))
             x = np.cos(c_a) * c_r
             y = np.sin(c_a) * c_r
-            rot = self.rng.uniform(0., 2 * np.pi, (max_n_ellipse,))
-            n_ellipse = min(self.rng.poisson(40), max_n_ellipse)
+            rot = self.rng.uniform(0., 2 * np.pi, (self.max_n_ellipse,))
+            n_ellipse = min(self.rng.poisson(40), self.max_n_ellipse)
             v[n_ellipse:] = 0.
             ellipsoids = np.stack((v, a1, a2, x, y, rot), axis=1)
             self.ellipses_data.append(ellipsoids)
@@ -143,12 +143,14 @@ def get_disk_dist_ellipses_dataset(
         im_size : int = 128, 
         length : int = 3200,
         diameter : float =  0.4745,
+        max_n_ellipse : int = 70,
         device = None) -> DiskDistributedEllipsesDataset:
 
     image_dataset = DiskDistributedEllipsesDataset(
             (im_size, im_size), 
             **{'length': length, 'fold': fold},
-            diameter=diameter
+            diameter=diameter, 
+            max_n_ellipse=max_n_ellipse
             )
     
     return image_dataset
