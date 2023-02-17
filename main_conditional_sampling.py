@@ -118,7 +118,7 @@ def coordinator():
 							ray_trafo=ray_trafo, 
 							diffusion_coeff=diffusion_coeff_fn, 
 							observation=observation, 
-							noise_level=noise_level, 
+							penalty=1., 
 							img_shape=x.shape[1:],
 							batch_size=config.sampling.batch_size, 
 							num_steps=config.sampling.num_steps, 

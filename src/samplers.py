@@ -6,7 +6,7 @@ def pc_sampler(score_model,
                 marginal_prob_std,
                 diffusion_coeff,
                 observation,
-                noise_level,
+                penalty,
                 ray_trafo,
                 img_shape,
                 batch_size, 
@@ -45,7 +45,7 @@ def pc_sampler(score_model,
       g = diffusion_coeff(batch_time_step)
       #x_mean = x + (g**2)[:, None, None, None] * (s - 1/noise_level**2 * norm_grad / 122.) * step_size
       
-      x_mean = x + (g**2)[:, None, None, None] * (s +  norm_grad / norm * 10.) * step_size
+      x_mean = x + (g**2)[:, None, None, None] * (s -  norm_grad * penalty) * step_size
 
       x = x_mean + torch.sqrt(g**2 * step_size)[:, None, None, None] * torch.randn_like(x)      
 
