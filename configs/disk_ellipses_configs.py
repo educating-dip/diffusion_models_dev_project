@@ -9,7 +9,7 @@ def get_config():
   # data
   data = config.data
   data.name = 'DiskDistributedEllipsesDataset'
-  data.im_size = 512 #501
+  data.im_size = 501
   data.length = 32000
   data.stddev = 0.05
   data.diameter = 0.4745
