@@ -27,7 +27,7 @@ def get_default_configs():
     validation.snr = 0.05
     validation.num_steps = 1000
     validation.eps = 1e-3
-    validation.sample_freq = 4 
+    validation.sample_freq = 1
 
     # sampling configs 
     config.sampling = sampling = ml_collections.ConfigDict()

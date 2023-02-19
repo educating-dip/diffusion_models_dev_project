@@ -38,7 +38,7 @@ def coordinator():
 
   elif config.data.name == 'DiskDistributedEllipsesDataset':
     
-    train_dl = get_disk_dist_ellipses_dataset(
+    dataset = get_disk_dist_ellipses_dataset(
             fold='train', 
             im_size=config.data.im_size, 
             length=config.data.length,
@@ -46,6 +46,7 @@ def coordinator():
             max_n_ellipse=config.data.num_n_ellipse, 
             device=config.device
           )
+    train_dl = torch.utils.data.DataLoader(dataset, batch_size=3, shuffle=False)
 
   if config.model.model_name == 'OpenAiUNetModel': 
 
@@ -98,4 +99,5 @@ def coordinator():
 
 
 if __name__ == '__main__': 
+
   coordinator()

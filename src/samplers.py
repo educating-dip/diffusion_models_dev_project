@@ -105,7 +105,8 @@ def simple_sampling(score_model,
                 snr,                
                 device='cuda',
                 start_time_step = 0,
-                eps=1e-3):
+                eps=1e-3,
+                x_fbp = None):
 
     time_steps = np.linspace(1., eps, num_steps)
     step_size = time_steps[0] - time_steps[1]
@@ -114,15 +115,11 @@ def simple_sampling(score_model,
       t = torch.ones(batch_size, device=device)
       init_x = torch.randn(batch_size, *img_shape, device=device) * marginal_prob_std(t)[:, None, None, None]
     else:
-      x_fbp = ray_trafo["fbp_module"](observation)
+      if x_fbp == None:
+        x_fbp = ray_trafo["fbp_module"](observation)
       std = marginal_prob_std(torch.ones(batch_size, device=device) * time_steps[start_time_step])
       z = torch.randn(batch_size, *img_shape, device=device)
       init_x = x_fbp + z * std[:, None, None, None]
-
-    import matplotlib.pyplot as plt 
-    plt.figure()
-    plt.imshow(init_x[0,0,:,:].detach().cpu())
-    plt.show() 
 
     x = init_x
     for i in tqdm(range(start_time_step, num_steps)):     
@@ -131,7 +128,6 @@ def simple_sampling(score_model,
 
       with torch.no_grad():
         s = score_model(x, batch_time_step)
-
 
       x = x.requires_grad_()
 
@@ -145,7 +141,6 @@ def simple_sampling(score_model,
       score_update = (g**2)[:, None, None, None] * s  * step_size
       data_discrepancy_update =  (g**2)[:, None, None, None] * norm_grad * step_size
 
-      print("|s|: ", torch.linalg.norm(score_update).item(), " |d|: ", torch.linalg.norm(data_discrepancy_update).item())
       x_mean = x + score_update - penalty*data_discrepancy_update
 
       x = x_mean + torch.sqrt(g**2 * step_size)[:, None, None, None] * torch.randn_like(x)      
