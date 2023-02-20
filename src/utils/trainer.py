@@ -62,7 +62,7 @@ def score_model_simple_trainer(
 		torch.save(score_model.state_dict(), os.path.join(log_dir,'model.pt'))
 		torch.save(ema.state_dict(), os.path.join(log_dir, 'ema_model.pt'))
 
-		if val_kwargs["sample_freq"] % (epoch + 1) == 0:
+		if  epoch % val_kwargs["sample_freq"]== 0:
 			score_model.eval()
 			with torch.no_grad():
 				x_mean = pc_sampler_unconditional(

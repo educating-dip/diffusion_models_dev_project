@@ -117,7 +117,7 @@ class DiskDistributedEllipsesDataset(EllipsesDataset):
             diameter: float = 0.4745, 
             max_n_ellipse : int = 70
             ):
-        super().__init__(shape=shape, length=length, fixed_seed=fixed_seed, fold=fold)
+        super().__init__(shape=shape, length=length, fixed_seed=fixed_seed, fold=fold, max_n_ellipse=max_n_ellipse)
         self.diameter = diameter
     
     def _extend_ellipses_data(self, min_length: int) -> None:
@@ -151,6 +151,58 @@ def get_disk_dist_ellipses_dataset(
             **{'length': length, 'fold': fold},
             diameter=diameter, 
             max_n_ellipse=max_n_ellipse
+            )
+    
+    return image_dataset
+
+
+class OneEllipsesDataset(EllipsesDataset):
+
+    def __init__(self,             
+            shape : Tuple[int, int] = (128,128), 
+            length : int = 3200, 
+            fixed_seed : int = 1, 
+            fold : str = 'train', 
+            diameter: float = 0.4745, 
+            ):
+        super().__init__(shape=shape, length=length, fixed_seed=fixed_seed, fold=fold, max_n_ellipse=1)
+        self.diameter = diameter
+    
+    def _extend_ellipses_data(self, min_length: int) -> None:
+        ellipsoids = np.empty((self.max_n_ellipse, 6))
+        n_to_generate = max(min_length - len(self.ellipses_data), 0)
+        for _ in range(n_to_generate):
+            v = (self.rng.uniform(0.1, 1.0, (self.max_n_ellipse,)))
+            a1 = .6 * self.diameter * self.rng.exponential(1., (self.max_n_ellipse,))
+            a2 = .6 * self.diameter * self.rng.exponential(1., (self.max_n_ellipse,))
+            a1 = np.maximum(1e-2, a1)/a1 * a1
+            a2 = np.maximum(1e-2, a2)/a2 * a2
+            c_r = self.rng.triangular(0., self.diameter, self.diameter, size=(self.max_n_ellipse,))
+            c_a = self.rng.uniform(0., 2 * np.pi, (self.max_n_ellipse,))
+            x = np.cos(c_a) * c_r
+            y = np.sin(c_a) * c_r
+            rot = self.rng.uniform(0., 2 * np.pi, (self.max_n_ellipse,))
+            ellipsoids = np.stack((v, a1, a2, x, y, rot), axis=1)
+            self.ellipses_data.append(ellipsoids)
+
+    def _generate_item(self, idx: int) -> Tensor:
+        ellipsoids = self.ellipses_data[idx]
+        image = ellipsoid_phantom(self.space, ellipsoids)
+
+        return torch.from_numpy(image.asarray()[None]).float()  # add channel dim
+
+
+def get_one_ellipses_dataset(
+        fold : str = 'train', 
+        im_size : int = 128, 
+        length : int = 3200,
+        diameter : float =  0.4745,
+        device = None) -> OneEllipsesDataset:
+
+    image_dataset = OneEllipsesDataset(
+            (im_size, im_size), 
+            **{'length': length, 'fold': fold},
+            diameter=diameter, 
             )
     
     return image_dataset

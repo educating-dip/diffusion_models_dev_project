@@ -5,10 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt 
 import numpy as np 
 from datetime import datetime 
-
+import yaml 
 
 from src import (loss_fn, ExponentialMovingAverage, marginal_prob_std, diffusion_coeff, 
-  OpenAiUNetModel, EllipseDatasetFromDival, get_disk_dist_ellipses_dataset, score_model_simple_trainer)
+  OpenAiUNetModel, EllipseDatasetFromDival, get_disk_dist_ellipses_dataset, score_model_simple_trainer, get_one_ellipses_dataset)
 
 
 #from configs.ellipses_configs import get_config
@@ -37,15 +37,23 @@ def coordinator():
       )
 
   elif config.data.name == 'DiskDistributedEllipsesDataset':
-    
-    dataset = get_disk_dist_ellipses_dataset(
-            fold='train', 
-            im_size=config.data.im_size, 
-            length=config.data.length,
-            diameter=config.data.diameter,
-            max_n_ellipse=config.data.num_n_ellipse, 
-            device=config.device
-          )
+    if config.data.num_n_ellipse > 1:
+      dataset = get_disk_dist_ellipses_dataset(
+              fold='train', 
+              im_size=config.data.im_size, 
+              length=config.data.length,
+              diameter=config.data.diameter,
+              max_n_ellipse=config.data.num_n_ellipse, 
+              device=config.device
+            )
+    else:
+      dataset = get_one_ellipses_dataset(
+              fold='train', 
+              im_size=config.data.im_size, 
+              length=config.data.length,
+              diameter=config.data.diameter,
+              device=config.device
+            )
     train_dl = torch.utils.data.DataLoader(dataset, batch_size=3, shuffle=False)
 
   if config.model.model_name == 'OpenAiUNetModel': 
@@ -74,6 +82,14 @@ def coordinator():
                   
   print(f" # Parameters: {sum([p.numel() for p in score_model.parameters()]) }")
   today = datetime.now()
+  log_dir = '/localdata/AlexanderDenker/score_based_baseline/checkpoints/' + today.strftime('%Y_%m_%d_%H:%m')
+
+  if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
+  with open(os.path.join(log_dir,'report.yaml'), 'w') as file:
+    documents = yaml.dump(config, file)
+
   score_model_simple_trainer(
     score_model=score_model.to(config.device),
     marginal_prob_std_fn=marginal_prob_std_fn,
@@ -94,7 +110,7 @@ def coordinator():
         'sample_freq' : config.validation.sample_freq
       },
     device=config.device,
-    log_dir='/localdata/AlexanderDenker/score_based_baseline/checkpoints/' + today.strftime('%Y_%m_%d_%H:%m')
+    log_dir=log_dir
   )
 
 
