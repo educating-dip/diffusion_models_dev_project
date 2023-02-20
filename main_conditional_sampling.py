@@ -6,23 +6,23 @@ import torch
 import functools
 import numpy as np 
 import matplotlib.pyplot as plt 
-from itertools import islice
 import yaml 
+from itertools import islice
+from math import ceil
 
 from itertools import islice
 from src import (marginal_prob_std, diffusion_coeff, OpenAiUNetModel,
-  pc_sampler, EllipseDatasetFromDival, simple_trafo, get_walnut_2d_ray_trafo, get_walnut_data_on_device,
-   simulate, PSNR, SSIM,simple_sampling, get_disk_dist_ellipses_dataset)
-
-
+  	pc_sampler, EllipseDatasetFromDival, simple_trafo, get_walnut_2d_ray_trafo, get_walnut_data_on_device,
+   	simulate, PSNR, SSIM, naive_sampling, get_disk_dist_ellipses_dataset)
 
 parser = argparse.ArgumentParser(description='Conditional Sampling.')
-
-parser.add_argument("dataset", help="which dataset to use")
-parser.add_argument("penalty", help="penalty parameter")
-
+parser.add_argument("--dataset", default='walnut', help="which dataset to use")
+parser.add_argument("--penalty", default=1, help="penalty parameter")
+parser.add_argument("--smpl_start_prc", default=0)
+parser.add_argument("--smpl_mthd", default="pc")
 
 def coordinator(args):
+
 	if args.dataset == "ellipses":
 		from configs.disk_ellipses_configs import get_config
 
@@ -30,7 +30,6 @@ def coordinator(args):
 		from configs.walnut_configs import get_config
 	else:
 		raise NotImplementedError
-
 
 	config = get_config()
 
@@ -165,9 +164,9 @@ def coordinator(args):
 			)
 			filterbackproj = ray_trafo["fbp_module"](observation)
 
-		if config.sampling.sampling_strategy == 'predictor_corrector':
+		if args.smpl_mthd == 'pc':
 
-			x_mean = simple_sampling(
+			x_mean = pc_sampler(
 							score_model=score_model, 
 							marginal_prob_std=marginal_prob_std_fn, 
 							ray_trafo=ray_trafo, 
@@ -181,7 +180,28 @@ def coordinator(args):
 							device=config.device, 
 							eps=config.sampling.eps,
 							x_fbp = filterbackproj,
-							start_time_step=config.sampling.start_time_step
+							start_time_step=ceil(args.smpl_start_prc * config.sampling.num_steps
+							)
+				)
+
+		elif  args.smpl_mthd == 'naive_smpl':
+
+			x_mean = naive_sampling(
+							score_model=score_model, 
+							marginal_prob_std=marginal_prob_std_fn, 
+							ray_trafo=ray_trafo, 
+							diffusion_coeff=diffusion_coeff_fn, 
+							observation=observation, 
+							penalty=float(args.penalty), 
+							img_shape=ground_truth.shape[1:],
+							batch_size=config.sampling.batch_size, 
+							num_steps=config.sampling.num_steps, 
+							snr=config.sampling.snr, 
+							device=config.device, 
+							eps=config.sampling.eps,
+							x_fbp = filterbackproj,
+							start_time_step=ceil(args.smpl_start_prc * config.sampling.num_steps
+							)
 				)
 
 		else:
