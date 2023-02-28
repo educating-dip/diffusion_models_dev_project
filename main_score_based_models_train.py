@@ -19,11 +19,14 @@ def coordinator():
   config = get_config()
   marginal_prob_std_fn = functools.partial(
       marginal_prob_std, 
-      sigma=config.sde.sigma
+      sigma_min=config.sde.sigma_min,
+      sigma_max=config.sde.sigma_max
+
     )
   diffusion_coeff_fn = functools.partial(
       diffusion_coeff, 
-      sigma=config.sde.sigma
+      sigma_min=config.sde.sigma_min,
+      sigma_max=config.sde.sigma_max
     )
 
   if config.data.name == 'EllipseDatasetFromDival':
@@ -89,7 +92,7 @@ def coordinator():
 
   with open(os.path.join(log_dir,'report.yaml'), 'w') as file:
     documents = yaml.dump(config, file)
-
+  
   score_model_simple_trainer(
     score_model=score_model.to(config.device),
     marginal_prob_std_fn=marginal_prob_std_fn,

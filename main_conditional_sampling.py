@@ -13,13 +13,25 @@ from math import ceil
 from itertools import islice
 from src import (marginal_prob_std, diffusion_coeff, OpenAiUNetModel,
   	pc_sampler, EllipseDatasetFromDival, simple_trafo, get_walnut_2d_ray_trafo, get_walnut_data_on_device,
-   	simulate, PSNR, SSIM, naive_sampling, get_disk_dist_ellipses_dataset)
+   	simulate, PSNR, SSIM, naive_sampling, get_disk_dist_ellipses_dataset, limited_angle_trafo, ExponentialMovingAverage, optimize_sampling)
 
 parser = argparse.ArgumentParser(description='Conditional Sampling.')
 parser.add_argument("--dataset", default='walnut', help="which dataset to use")
 parser.add_argument("--penalty", default=1, help="penalty parameter")
 parser.add_argument("--smpl_start_prc", default=0)
 parser.add_argument("--smpl_mthd", default="pc")
+
+parser.add_argument("--limited_angle", action='store_true')
+parser.add_argument("--angular_range", default=45)
+
+parser.add_argument("--sparse_view", action='store_true')
+parser.add_argument("--angles", default=30)
+
+parser.add_argument("--ema", action='store_true')
+
+parser.add_argument("--num_steps", default=1000)
+
+parser.add_argument("--walnut_trafo", action='store_true')
 
 def coordinator(args):
 
@@ -34,21 +46,28 @@ def coordinator(args):
 	config = get_config()
 
 	# set up save path for results 
-	save_root = Path(f'./results/{config.data.name}/sampler=naive/start_N={config.sampling.start_time_step}/penalty={args.penalty}')
+	if args.limited_angle:
+		save_root = Path(f'./results/limited_angle/{args.dataset}/sampler={args.smpl_mthd}/sampling_steps={ceil(float(args.smpl_start_prc) * int(args.num_steps))}_to_{int(args.num_steps)}/penalty={args.penalty}/angular_range={args.angular_range}')
+	elif args.sparse_view:
+		save_root = Path(f'./results/sparse_view/{args.dataset}/sampler={args.smpl_mthd}/sampling_steps={ceil(float(args.smpl_start_prc) * int(args.num_steps))}_to_{int(args.num_steps)}/penalty={args.penalty}/angles={args.angles}')
+	else:
+		save_root = Path(f'./results/{args.dataset}/sampler={args.smpl_mthd}/sampling_steps={ceil(float(args.smpl_start_prc) * int(args.num_steps))}_to_{int(args.num_steps)}/penalty={args.penalty}')
 	save_root.mkdir(parents=True, exist_ok=True)
 
 	print("Start with penalty: ", float(args.penalty))
 
-	if config.seed is not None:
-		torch.manual_seed(config.seed)  # for reproducible noise in simulate
+	#if config.seed is not None:
+	#	torch.manual_seed(config.seed)  # for reproducible noise in simulate
 	
 	marginal_prob_std_fn = functools.partial(
       marginal_prob_std,
-      sigma=config.sde.sigma
+      sigma_min=config.sde.sigma_min,
+	  sigma_max=config.sde.sigma_max
     )
 	diffusion_coeff_fn = functools.partial(
       diffusion_coeff, 
-      sigma=config.sde.sigma
+      sigma_min=config.sde.sigma_min,
+	  sigma_max=config.sde.sigma_max
     )
 	
 	# TODO: getter model func and saving/loading funcs
@@ -79,9 +98,17 @@ def coordinator(args):
 
 	if (config.sampling.load_model_from_path is not None) and (config.sampling.model_name is not None): 
 		print("Load Score Model...")
-		score_model.load_state_dict(torch.load(
-			os.path.join(config.sampling.load_model_from_path, config.sampling.model_name))
+		if args.ema:
+			ema = ExponentialMovingAverage(score_model.parameters(), decay=0.999)
+			ema.load_state_dict(torch.load(os.path.join(config.sampling.load_model_from_path,"ema_model.pt")))
+			ema.copy_to(score_model.parameters())
+
+		else:
+			score_model.load_state_dict(torch.load(
+				os.path.join(config.sampling.load_model_from_path, config.sampling.model_name))
 			)
+
+
 
 	score_model = score_model.to(config.device)
 	score_model.eval()
@@ -92,6 +119,7 @@ def coordinator(args):
 							num_angles=config.forward_op.num_angles
 		)
 	elif config.forward_op.trafo_name == 'walnut_trafo':
+
 			ray_trafo = {}
 			ray_trafo_obj = get_walnut_2d_ray_trafo(
 									data_path=config.data.data_path,
@@ -131,8 +159,36 @@ def coordinator(args):
 	else:
 		raise NotImplementedError
 
+
+	if args.limited_angle:
+		ray_trafo = limited_angle_trafo(im_size=config.data.im_size, 
+							angular_range=int(args.angular_range))
+	elif args.sparse_view:
+		ray_trafo = simple_trafo(
+							im_size=config.data.im_size, 
+							num_angles=int(args.angles)
+		)
+	elif args.walnut_trafo:
+		from configs.walnut_configs import get_config
+		walnut_config = get_config()
+		ray_trafo = {}
+		ray_trafo_obj = get_walnut_2d_ray_trafo(
+									data_path=walnut_config.data.data_path,
+									matrix_path=walnut_config.data.data_path,
+									walnut_id=walnut_config.data.walnut_id,
+									orbit_id=walnut_config.forward_op.orbit_id,
+									angular_sub_sampling=walnut_config.forward_op.angular_sub_sampling,
+									proj_col_sub_sampling=walnut_config.forward_op.proj_col_sub_sampling
+			)
+		ray_trafo_obj = ray_trafo_obj.to(device=config.device)
+		ray_trafo['ray_trafo_module'] = ray_trafo_obj
+		ray_trafo['fbp_module'] = ray_trafo_obj.fbp
+
 	psnr_list = []
 	ssim_list = []
+
+	psnr_fbp_list = []
+	ssim_fbp_list = [] 
 	for i, data_sample in enumerate(islice(dataset, config.data.validation.num_images)):
 		if len(data_sample) == 2 and config.data.name == 'EllipseDatasetFromDival':
 			
@@ -152,6 +208,15 @@ def coordinator(args):
 			observation = observation.to(device=config.device)
 			filterbackproj = filterbackproj.to(device=config.device)
 
+			if args.limited_angle or args.sparse_view:
+				observation = simulate(
+				ground_truth,
+				ray_trafo['ray_trafo_module'],
+				white_noise_rel_stddev=config.data.stddev,
+				return_noise_level=False
+				)
+				filterbackproj = ray_trafo["fbp_module"](observation)
+
 		elif config.data.name == "DiskDistributedEllipsesDataset":
 			ground_truth = data_sample
 			ground_truth = ground_truth.unsqueeze(0)
@@ -163,6 +228,7 @@ def coordinator(args):
 					return_noise_level=True
 			)
 			filterbackproj = ray_trafo["fbp_module"](observation)
+	
 
 		if args.smpl_mthd == 'pc':
 
@@ -175,13 +241,14 @@ def coordinator(args):
 							penalty=float(args.penalty), 
 							img_shape=ground_truth.shape[1:],
 							batch_size=config.sampling.batch_size, 
-							num_steps=config.sampling.num_steps, 
+							num_steps=int(args.num_steps), 
 							snr=config.sampling.snr, 
 							device=config.device, 
 							eps=config.sampling.eps,
 							x_fbp = filterbackproj,
-							start_time_step=ceil(args.smpl_start_prc * config.sampling.num_steps
-							)
+							start_time_step=ceil(float(args.smpl_start_prc) * int(args.num_steps)),
+							log_dir = save_root,
+							ground_truth = ground_truth			
 				)
 
 		elif  args.smpl_mthd == 'naive_smpl':
@@ -195,13 +262,14 @@ def coordinator(args):
 							penalty=float(args.penalty), 
 							img_shape=ground_truth.shape[1:],
 							batch_size=config.sampling.batch_size, 
-							num_steps=config.sampling.num_steps, 
+							num_steps=int(args.num_steps), 
 							snr=config.sampling.snr, 
 							device=config.device, 
 							eps=config.sampling.eps,
 							x_fbp = filterbackproj,
-							start_time_step=ceil(args.smpl_start_prc * config.sampling.num_steps
-							)
+							start_time_step=ceil(float(args.smpl_start_prc) * int(args.num_steps)),
+							log_dir = save_root,
+							ground_truth = ground_truth
 				)
 
 		else:
@@ -223,11 +291,23 @@ def coordinator(args):
 		print('PSNR:', psnr)
 		print('SSIM:', ssim)
 
-		fig, (ax1, ax2) = plt.subplots(1,2)
+		psnr_fbp_list.append(PSNR(filterbackproj[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy()))
+		ssim_fbp_list.append(SSIM(filterbackproj[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy()))
+
+		fig, (ax1, ax2,ax3, ax4) = plt.subplots(1,4)
 		ax1.imshow(x_mean[0,0,:,:].cpu(), cmap="gray")
+		ax1.set_title("Score-based Reco.")
 		ax2.imshow(ground_truth[0,0,:,:].cpu(), cmap="gray")
+		ax2.set_title("Ground truth")
+		ax3.imshow(filterbackproj[0,0,:,:].cpu(), cmap="gray")
+		ax3.set_title("FBP Reco.")
+		
+		ax4.imshow(ground_truth[0,0,:,:].cpu() - x_mean[0,0,:,:].cpu(), cmap="gray")
+		ax4.set_title("Residual")
+		fig.savefig(f'penaly={args.penalty}.pdf')
 		fig.savefig(str(save_root / f'recon_{i}.png'))
-		plt.close() 
+		plt.show()
+		plt.close("all") 
 
 	print("MEAN PSNR: ", np.mean(psnr_list))
 	print("MEAN SSIM: ", np.mean(ssim_list))
@@ -240,6 +320,9 @@ def coordinator(args):
     
 	report_dict['results']['PSNR'] = float(np.mean(psnr_list))
 	report_dict['results']['SSIM'] = float(np.mean(ssim_list))
+
+	report_dict['results']['PSNR_FBP'] = float(np.mean(psnr_fbp_list))
+	report_dict['results']['SSIM_FBP'] = float(np.mean(ssim_fbp_list))
 	print(report_dict)
 
 	with open(save_root / 'report.yaml', 'w') as file:
