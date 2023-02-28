@@ -451,6 +451,7 @@ class OpenAiUNetModel(nn.Module):
         self._feature_size = ch
         input_block_chans = [ch]
         ds = 1
+
         for level, mult in enumerate(channel_mult):
             for _ in range(num_res_blocks):
                 layers = [

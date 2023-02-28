@@ -3,6 +3,10 @@ import numpy as np
 from tqdm import tqdm 
 from scipy import integrate
 
+from torch.utils.tensorboard import SummaryWriter
+import torchvision
+
+from .utils import PSNR, SSIM
 
 
 def pc_sampler(score_model, 
@@ -18,9 +22,18 @@ def pc_sampler(score_model,
                 device='cuda',
                 eps=1e-3,
 				start_time_step=0, 
-                x_fbp=None
+                x_fbp=None,
+				log_dir = None, 
+				num_img_log=10,
+				log_freq=10,
+				ground_truth = None
                 ):
 
+
+	if not log_dir == None:
+		writer = SummaryWriter(log_dir=log_dir)
+
+		log_img_interval = (num_steps - start_time_step)/num_img_log
 
 	time_steps = np.linspace(1., eps, num_steps)
 	step_size = time_steps[0] - time_steps[1]
@@ -35,6 +48,10 @@ def pc_sampler(score_model,
 		z = torch.randn(batch_size, *img_shape, device=device)
 		init_x = x_fbp + z * std[:, None, None, None]
 
+	if not log_dir == None:
+		init_x_grid = torchvision.utils.make_grid(init_x, normalize=True, scale_each=True)		
+		writer.add_image("init_x", init_x_grid, global_step=0)
+
 	x = init_x
 	for i in tqdm(range(start_time_step, num_steps)):
 		time_step = time_steps[i]
@@ -44,19 +61,20 @@ def pc_sampler(score_model,
 			the inclusion of the corrector step which is proposed in Algo. 2 in the appedinx in 
 			SCORE-BASED GENERATIVE MODELING THROUGH STOCHASTIC DIFFERENTIAL EQUATIONS [https://arxiv.org/pdf/2011.13456.pdf]. '''
       
-		with torch.no_grad():
-			batch_time_step = torch.ones(batch_size, device=device) * time_step
-			# Corrector step (Langevin MCMC)
-			grad = score_model(x, batch_time_step)
-			grad_norm = torch.norm(grad.reshape(grad.shape[0], -1), dim=-1).mean()
-			noise_norm = np.sqrt(np.prod(x.shape[1:]))
-			langevin_step_size = 2 * (snr * noise_norm / grad_norm)**2
-			x = x + langevin_step_size * grad + torch.sqrt(2 * langevin_step_size) * torch.randn_like(x)      
+		#with torch.no_grad():
+		#	batch_time_step = torch.ones(batch_size, device=device) * time_step
+		#	# Corrector step (Langevin MCMC)
+		#	grad = score_model(x, batch_time_step)
+		#	grad_norm = torch.norm(grad.reshape(grad.shape[0], -1), dim=-1).mean()
+		#	noise_norm = np.sqrt(np.prod(x.shape[1:]))
+		#	langevin_step_size = 2 * (snr * noise_norm / grad_norm)**2
+		#	x = x + langevin_step_size * grad + torch.sqrt(2 * langevin_step_size) * torch.randn_like(x)      
 
 		x = x.requires_grad_()
 		s = score_model(x, batch_time_step)
 		std = marginal_prob_std(batch_time_step)
 		xhat0 = x + s * std[:, None, None, None]
+
 		#norm = torch.linalg.norm(ray_trafo['ray_trafo_adjoint_module'](observation - ray_trafo['ray_trafo_module'](xhat0)))
 		norm = torch.linalg.norm(observation - ray_trafo['ray_trafo_module'](xhat0))
 		norm_grad = torch.autograd.grad(outputs=norm, inputs=x)[0]
@@ -72,6 +90,19 @@ def pc_sampler(score_model,
 		x = x.detach()
 		x_mean = x_mean.detach()
 		# The last step does not include any noise
+
+		if not log_dir == None:
+			if i - start_time_step % log_img_interval == 0:
+				x_grid = torchvision.utils.make_grid(x, normalize=True, scale_each=True)		
+				writer.add_image("reco_at_step", x_grid, global_step=i)
+
+			if i % log_freq == 0:
+				writer.add_scalar("|Ax-y|", norm.item(), global_step=i)
+				psnr = PSNR(x[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
+				ssim = SSIM(x[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
+				writer.add_scalar("PSNR", psnr, global_step=i)
+				writer.add_scalar("SSIM", ssim, global_step=i)
+
 
 	return x_mean
 
@@ -128,9 +159,18 @@ def naive_sampling(score_model,
                 device='cuda',
                 start_time_step = 0,
                 eps=1e-3,
-                x_fbp = None):
+                x_fbp = None,
+				log_dir = None, 
+				num_img_log=10,
+				log_freq=10,
+				ground_truth = None):
 
 	''' Based on ``Robust Compressed Sensing MRI with Deep Generative Priors'' [https://arxiv.org/pdf/2108.01368.pdf] '''
+
+	if not log_dir == None:
+		writer = SummaryWriter(log_dir=log_dir)
+
+		log_img_interval = (num_steps - start_time_step)/num_img_log
 
 	time_steps = np.linspace(1., eps, num_steps)
 	step_size = time_steps[0] - time_steps[1]
@@ -145,6 +185,13 @@ def naive_sampling(score_model,
 		z = torch.randn(batch_size, *img_shape, device=device)
 		init_x = x_fbp + z * std[:, None, None, None]
 
+	if not log_dir == None:
+		init_x_grid = torchvision.utils.make_grid(init_x, normalize=True, scale_each=True)		
+		writer.add_image("init_x", init_x_grid, global_step=0)
+
+		fbp_grid = torchvision.utils.make_grid(x_fbp, normalize=True, scale_each=True)		
+		writer.add_image("fbp", fbp_grid, global_step=0)
+
 	x = init_x
 	for i in tqdm(range(start_time_step, num_steps)):     
 		time_step = time_steps[i]
@@ -157,6 +204,10 @@ def naive_sampling(score_model,
 
 		norm = torch.linalg.norm(observation - ray_trafo['ray_trafo_module'](x))
 		norm_grad = torch.autograd.grad(outputs=norm, inputs=x)[0]
+		
+		#norm_grad = norm_grad / torch.linalg.norm(norm_grad)
+		#norm_grad = norm_grad * torch.linalg.norm(s)
+
 
 		# Predictor step (Euler-Maruyama)
 		g = diffusion_coeff(batch_time_step)
@@ -165,13 +216,30 @@ def naive_sampling(score_model,
 		score_update = (g**2)[:, None, None, None] * s  * step_size
 		data_discrepancy_update =  (g**2)[:, None, None, None] * norm_grad * step_size
 
-		x_mean = x + score_update - penalty*data_discrepancy_update
+
+		x_mean = x + score_update - penalty*data_discrepancy_update*i/num_steps
 
 		x = x_mean + torch.sqrt(g**2 * step_size)[:, None, None, None] * torch.randn_like(x)      
 
 		x = x.detach()
 		x_mean = x_mean.detach()
 		# The last step does not include any noise
+
+		if not log_dir == None:
+			if (i - start_time_step) % log_img_interval == 0:
+				x_grid = torchvision.utils.make_grid(x, normalize=True, scale_each=True)		
+				writer.add_image("reco_at_step", x_grid, global_step=i)
+
+			if i % log_freq == 0:
+				writer.add_scalar("|Ax-y|", norm.item(), global_step=i)
+				psnr = PSNR(x[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
+				ssim = SSIM(x[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
+				writer.add_scalar("PSNR", psnr, global_step=i)
+				writer.add_scalar("SSIM", ssim, global_step=i)
+
+	if not log_dir == None:
+		x_grid = torchvision.utils.make_grid(x_mean, normalize=True, scale_each=True)		
+		writer.add_image("reco_at_step", x_grid, global_step=num_steps)
 
 	return x_mean
 
@@ -219,3 +287,102 @@ def ode_sampler(score_model,
 	x = torch.tensor(res.y[:, -1], device=device).reshape(shape)
 
 	return x
+
+
+
+
+def optimize_sampling(score_model, 
+                marginal_prob_std,
+                diffusion_coeff,
+                observation,
+                penalty,
+                ray_trafo,
+                img_shape,
+                batch_size, 
+                num_steps, 
+                snr,                
+                device='cuda',
+                start_time_step = 0,
+                eps=1e-3,
+                x_fbp = None,
+				log_dir = None, 
+				num_img_log=10,
+				log_freq=10,
+				ground_truth = None):
+
+
+	if not log_dir == None:
+		writer = SummaryWriter(log_dir=log_dir)
+
+		log_img_interval = (num_steps - start_time_step)/num_img_log
+
+	time_steps = np.linspace(1., eps, num_steps)
+	step_size = time_steps[0] - time_steps[1]
+
+	if start_time_step == 0:
+		t = torch.ones(batch_size, device=device)
+		init_x = torch.randn(batch_size, *img_shape, device=device) * marginal_prob_std(t)[:, None, None, None]
+	else:
+		if x_fbp == None:
+			x_fbp = ray_trafo["fbp_module"](observation)
+		std = marginal_prob_std(torch.ones(batch_size, device=device) * time_steps[start_time_step])
+		z = torch.randn(batch_size, *img_shape, device=device)
+		init_x = x_fbp + z * std[:, None, None, None]
+
+	if not log_dir == None:
+		init_x_grid = torchvision.utils.make_grid(init_x, normalize=True, scale_each=True)		
+		writer.add_image("init_x", init_x_grid, global_step=0)
+
+		fbp_grid = torchvision.utils.make_grid(x_fbp, normalize=True, scale_each=True)		
+		writer.add_image("fbp", fbp_grid, global_step=0)
+
+	x = init_x
+
+	score_model.train()
+	optimizer = torch.optim.Adam(score_model.parameters(), lr=1e-2)
+
+	for i in tqdm(range(start_time_step, num_steps)):     
+
+		time_step = time_steps[i]
+		batch_time_step = torch.ones(batch_size, device=device) * time_step
+
+		for _ in range(3):
+			optimizer.zero_grad() 
+			# one optimizer step on theta
+			s = score_model(x, batch_time_step)
+			std = marginal_prob_std(batch_time_step)
+			xhat0 = x + s * std[:, None, None, None]
+
+			loss = torch.linalg.norm(observation - ray_trafo['ray_trafo_module'](xhat0))
+			loss.backward()
+			
+			optimizer.step() 
+
+		with torch.no_grad():
+			s = score_model(x, batch_time_step)
+			g = diffusion_coeff(batch_time_step)
+
+			x_mean = x + (g**2)[:, None, None, None] * s  * step_size 
+
+			x = x_mean + torch.sqrt(g**2 * step_size)[:, None, None, None] * torch.randn_like(x)      
+
+
+
+		if not log_dir == None:
+			if (i - start_time_step) % log_img_interval == 0:
+				x_grid = torchvision.utils.make_grid(x, normalize=True, scale_each=True)		
+				writer.add_image("reco_at_step", x_grid, global_step=i)
+
+			if i % log_freq == 0:
+				#writer.add_scalar("|Ax-y|", norm.item(), global_step=i)
+				psnr = PSNR(x[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
+				ssim = SSIM(x[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
+				writer.add_scalar("PSNR", psnr, global_step=i)
+				writer.add_scalar("SSIM", ssim, global_step=i)
+
+	if not log_dir == None:
+		x_grid = torchvision.utils.make_grid(x_mean, normalize=True, scale_each=True)		
+		writer.add_image("reco_at_step", x_grid, global_step=num_steps)
+	
+	# The last step does not include any noise
+	return x_mean
