@@ -21,6 +21,8 @@ def get_config():
   data.validation = validation = ml_collections.ConfigDict()
   data.validation.num_images = 1 
 
+  data.stddev = 0.05
+
   # forward operator
   forward_op = config.forward_op
   forward_op.trafo_name = 'walnut_trafo'
@@ -32,7 +34,8 @@ def get_config():
   config.model.model_name = 'OpenAiUNetModel'
   config.model.attention_resolutions = [config.data.im_size // 16, config.data.im_size // 8]
 
-  config.sampling.load_model_from_path = "./"
+  #config.sampling.load_model_from_path = "./"
+  config.sampling.load_model_from_path = "/localdata/AlexanderDenker/score_based_baseline/checkpoints/2023_02_22_10:02"
   config.sampling.model_name = "model.pt"
 
 
