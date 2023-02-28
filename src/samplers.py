@@ -9,6 +9,167 @@ import torchvision
 from .utils import PSNR, SSIM
 
 
+def posterior_sampling(score_model, 
+                marginal_prob_std,
+                diffusion_coeff,
+                observation,
+                penalty,
+                ray_trafo,
+                img_shape,
+                batch_size, 
+                num_steps, 
+                snr,          
+				predictor="euler_maruyama",
+				corrector="langevin",
+				corrector_steps = 1,
+				method="naive",
+                device='cuda',
+                start_time_step = 0,
+                eps=1e-3,
+                x_fbp = None,
+				log_dir = None, 
+				num_img_log=10,
+				log_freq=10,
+				ground_truth = None):
+	
+	"""
+	method = "naive": Jalal et al. (2020) https://arxiv.org/pdf/2209.14687.pdf
+	method = "dps": Chung et al. (2022) https://proceedings.neurips.cc/paper/2020/file/07cb5f86508f146774a2fac4373a8e50-Paper.pdf
+
+	"""
+	assert method in ["naive", "dps"], f"method {method} is not supported. Use *naive* or *dps*."
+
+	if not log_dir == None:
+		writer = SummaryWriter(log_dir=log_dir)
+
+		log_img_interval = (num_steps - start_time_step)/num_img_log
+
+	time_steps = np.linspace(1., eps, num_steps)
+	step_size = time_steps[0] - time_steps[1]
+
+	if start_time_step == 0:
+		t = torch.ones(batch_size, device=device)
+		init_x = torch.randn(batch_size, *img_shape, device=device) * marginal_prob_std(t)[:, None, None, None]
+	else:
+		if x_fbp == None:
+			x_fbp = ray_trafo["fbp_module"](observation)
+		std = marginal_prob_std(torch.ones(batch_size, device=device) * time_steps[start_time_step])
+		z = torch.randn(batch_size, *img_shape, device=device)
+		init_x = x_fbp + z * std[:, None, None, None]
+
+	if not log_dir == None:
+		init_x_grid = torchvision.utils.make_grid(init_x, normalize=True, scale_each=True)		
+		writer.add_image("init_x", init_x_grid, global_step=0)
+
+		fbp_grid = torchvision.utils.make_grid(x_fbp, normalize=True, scale_each=True)		
+		writer.add_image("fbp", fbp_grid, global_step=0)
+
+	x = init_x
+	for i in tqdm(range(start_time_step, num_steps)):     
+		time_step = time_steps[i]
+		batch_time_step = torch.ones(batch_size, device=device) * time_step
+
+		# Corrector step (Langevin MCMC)
+		if corrector == "langevin": 
+			if method == "naive":
+				for _ in range(corrector_steps):
+					with torch.no_grad():
+						s = score_model(x, batch_time_step)
+
+					x = x.requires_grad_()
+
+					norm = torch.linalg.norm(observation - ray_trafo['ray_trafo_module'](x))
+					norm_grad = torch.autograd.grad(outputs=norm, inputs=x)[0]
+			
+					grad = s - penalty*norm_grad*i/num_steps
+					grad_norm = torch.norm(grad.reshape(grad.shape[0], -1), dim=-1).mean()
+					noise_norm = np.sqrt(np.prod(x.shape[1:]))
+					langevin_step_size = 2 * (snr * noise_norm / grad_norm)**2
+					x = x + langevin_step_size * grad + torch.sqrt(2 * langevin_step_size) * torch.randn_like(x)  
+					x = x.detach()
+
+			elif method == "dps":
+				for _ in range(corrector_steps):
+					x = x.requires_grad_()
+					s = score_model(x, batch_time_step)
+					std = marginal_prob_std(batch_time_step)
+					xhat0 = x + s * std[:, None, None, None]
+
+					norm = torch.linalg.norm(observation - ray_trafo['ray_trafo_module'](xhat0))
+					norm_grad = torch.autograd.grad(outputs=norm, inputs=x)[0]
+
+					grad = s - norm_grad * penalty
+					grad_norm = torch.norm(grad.reshape(grad.shape[0], -1), dim=-1).mean()
+					noise_norm = np.sqrt(np.prod(x.shape[1:]))
+					langevin_step_size = 2 * (snr * noise_norm / grad_norm)**2
+					x = x + langevin_step_size * grad + torch.sqrt(2 * langevin_step_size) * torch.randn_like(x)  
+					x = x.detach()
+
+		# Predictor step (Euler Maruyama) 
+		if predictor == "euler_maruyama":
+			if method == "naive":
+				with torch.no_grad():
+					s = score_model(x, batch_time_step)
+
+				x = x.requires_grad_()
+
+				norm = torch.linalg.norm(observation - ray_trafo['ray_trafo_module'](x))
+				norm_grad = torch.autograd.grad(outputs=norm, inputs=x)[0]
+		
+				grad = s - penalty*norm_grad*i/num_steps
+				
+				g = diffusion_coeff(batch_time_step)
+
+				x_mean = x + (g**2)[:, None, None, None] * grad * step_size
+				x = x_mean + torch.sqrt(g**2 * step_size)[:, None, None, None] * torch.randn_like(x)      
+
+				x = x.detach()
+				x_mean = x_mean.detach()
+
+
+			elif method == "dps":
+				x = x.requires_grad_()
+				s = score_model(x, batch_time_step)
+				std = marginal_prob_std(batch_time_step)
+				xhat0 = x + s * std[:, None, None, None]
+
+				norm = torch.linalg.norm(observation - ray_trafo['ray_trafo_module'](xhat0))
+				norm_grad = torch.autograd.grad(outputs=norm, inputs=x)[0]
+
+				grad = s - norm_grad * penalty
+				
+				g = diffusion_coeff(batch_time_step)
+
+				x_mean = x + (g**2)[:, None, None, None] * grad * step_size
+				x = x_mean + torch.sqrt(g**2 * step_size)[:, None, None, None] * torch.randn_like(x)      
+
+				x = x.detach()
+				x_mean = x_mean.detach()
+
+		if not log_dir == None:
+			if (i - start_time_step) % log_img_interval == 0:
+				x_grid = torchvision.utils.make_grid(x, normalize=True, scale_each=True)		
+				writer.add_image("reco_at_step", x_grid, global_step=i)
+
+			if i % log_freq == 0:
+				writer.add_scalar("|Ax-y|", norm.item(), global_step=i)
+				psnr = PSNR(x[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
+				ssim = SSIM(x[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
+				writer.add_scalar("PSNR", psnr, global_step=i)
+				writer.add_scalar("SSIM", ssim, global_step=i)
+
+
+	if not log_dir == None:
+		x_grid = torchvision.utils.make_grid(x_mean, normalize=True, scale_each=True)		
+		writer.add_image("reco_at_step", x_grid, global_step=num_steps)
+
+	return x_mean
+
+
+
+
+
+
 def pc_sampler(score_model, 
                 marginal_prob_std,
                 diffusion_coeff,

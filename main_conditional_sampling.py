@@ -11,15 +11,14 @@ from itertools import islice
 from math import ceil
 
 from itertools import islice
-from src import (marginal_prob_std, diffusion_coeff, OpenAiUNetModel,
-  	pc_sampler, EllipseDatasetFromDival, simple_trafo, get_walnut_2d_ray_trafo, get_walnut_data_on_device,
-   	simulate, PSNR, SSIM, naive_sampling, get_disk_dist_ellipses_dataset, limited_angle_trafo, ExponentialMovingAverage, optimize_sampling)
+from src import (marginal_prob_std, diffusion_coeff, OpenAiUNetModel, EllipseDatasetFromDival, simple_trafo, get_walnut_2d_ray_trafo, get_walnut_data_on_device,
+   	simulate, PSNR, SSIM, posterior_sampling, get_disk_dist_ellipses_dataset, limited_angle_trafo, ExponentialMovingAverage, optimize_sampling)
 
 parser = argparse.ArgumentParser(description='Conditional Sampling.')
 parser.add_argument("--dataset", default='walnut', help="which dataset to use")
 parser.add_argument("--penalty", default=1, help="penalty parameter")
 parser.add_argument("--smpl_start_prc", default=0)
-parser.add_argument("--smpl_mthd", default="pc")
+parser.add_argument("--smpl_mthd", default="dps", choices=['dps', 'naive'])
 
 parser.add_argument("--limited_angle", action='store_true')
 parser.add_argument("--angular_range", default=45)
@@ -230,9 +229,7 @@ def coordinator(args):
 			filterbackproj = ray_trafo["fbp_module"](observation)
 	
 
-		if args.smpl_mthd == 'pc':
-
-			x_mean = pc_sampler(
+		x_mean = posterior_sampling(
 							score_model=score_model, 
 							marginal_prob_std=marginal_prob_std_fn, 
 							ray_trafo=ray_trafo, 
@@ -248,33 +245,12 @@ def coordinator(args):
 							x_fbp = filterbackproj,
 							start_time_step=ceil(float(args.smpl_start_prc) * int(args.num_steps)),
 							log_dir = save_root,
-							ground_truth = ground_truth			
-				)
+							ground_truth = ground_truth,
+							predictor = "euler_maruyama",
+							corrector = "langevin",
+							corrector_steps = 1, 
+							method = args.smpl_mthd)
 
-		elif  args.smpl_mthd == 'naive_smpl':
-
-			x_mean = naive_sampling(
-							score_model=score_model, 
-							marginal_prob_std=marginal_prob_std_fn, 
-							ray_trafo=ray_trafo, 
-							diffusion_coeff=diffusion_coeff_fn, 
-							observation=observation, 
-							penalty=float(args.penalty), 
-							img_shape=ground_truth.shape[1:],
-							batch_size=config.sampling.batch_size, 
-							num_steps=int(args.num_steps), 
-							snr=config.sampling.snr, 
-							device=config.device, 
-							eps=config.sampling.eps,
-							x_fbp = filterbackproj,
-							start_time_step=ceil(float(args.smpl_start_prc) * int(args.num_steps)),
-							log_dir = save_root,
-							ground_truth = ground_truth
-				)
-
-		else:
-				
-			raise NotImplementedError
 		
 		x_mean = torch.clamp(x_mean, 0, 1)
 		torch.save(
