@@ -116,7 +116,7 @@ def posterior_sampling(score_model,
 				norm = torch.linalg.norm(observation - ray_trafo['ray_trafo_module'](x))
 				norm_grad = torch.autograd.grad(outputs=norm, inputs=x)[0]
 		
-				grad = s - penalty*norm_grad*i/num_steps
+				grad = s - penalty*norm_grad *i/num_steps
 				
 				g = diffusion_coeff(batch_time_step)
 
@@ -131,12 +131,12 @@ def posterior_sampling(score_model,
 				x = x.requires_grad_()
 				s = score_model(x, batch_time_step)
 				std = marginal_prob_std(batch_time_step)
-				xhat0 = x + s * std[:, None, None, None]
+				xhat0 = x + s * std[:, None, None, None]**2
 
 				norm = torch.linalg.norm(observation - ray_trafo['ray_trafo_module'](xhat0))
 				norm_grad = torch.autograd.grad(outputs=norm, inputs=x)[0]
 
-				grad = s - norm_grad * penalty
+				grad = s - norm_grad/norm * penalty
 				
 				g = diffusion_coeff(batch_time_step)
 
