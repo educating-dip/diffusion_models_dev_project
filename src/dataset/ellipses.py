@@ -66,7 +66,7 @@ class EllipsesDataset(torch.utils.data.IterableDataset):
             x = self.rng.uniform(-0.9, 0.9, (self.max_n_ellipse,))
             y = self.rng.uniform(-0.9, 0.9, (self.max_n_ellipse,))
             rot = self.rng.uniform(0., 2 * np.pi, (self.max_n_ellipse,))
-            n_ellipse = min(self.rng.poisson(40), self.max_n_ellipse)
+            n_ellipse = min(self.rng.poisson(self.max_n_ellipse), self.max_n_ellipse)
             v[n_ellipse:] = 0.
             ellipsoids = np.stack((v, a1, a2, x, y, rot), axis=1)
             self.ellipses_data.append(ellipsoids)
@@ -132,7 +132,7 @@ class DiskDistributedEllipsesDataset(EllipsesDataset):
             x = np.cos(c_a) * c_r
             y = np.sin(c_a) * c_r
             rot = self.rng.uniform(0., 2 * np.pi, (self.max_n_ellipse,))
-            n_ellipse = min(self.rng.poisson(40), self.max_n_ellipse)
+            n_ellipse = min(self.rng.poisson(self.max_n_ellipse), self.max_n_ellipse)
             v[n_ellipse:] = 0.
             ellipsoids = np.stack((v, a1, a2, x, y, rot), axis=1)
             self.ellipses_data.append(ellipsoids)

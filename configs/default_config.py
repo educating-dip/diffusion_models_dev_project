@@ -56,7 +56,7 @@ def get_default_configs():
     model.out_channels = 1
     model.num_res_blocks = 2
     #model.attention_resolutions = [config.data.im_size // 16, config.data.im_size // 8]
-    model.channel_mult = (0.5, 1, 1, 2, 2, 4, 4)
+    model.channel_mult = (0.5, 1, 1, 2, 2, 2, 4)
     model.conv_resample = True
     model.dims = 2
     model.num_heads = 1
