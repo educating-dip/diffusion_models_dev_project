@@ -12,19 +12,14 @@ from math import ceil
 
 from itertools import islice
 from src import (marginal_prob_std, diffusion_coeff, OpenAiUNetModel, EllipseDatasetFromDival, simple_trafo, get_walnut_2d_ray_trafo, get_walnut_data_on_device,
-   	simulate, PSNR, SSIM, posterior_sampling, get_disk_dist_ellipses_dataset, limited_angle_trafo, ExponentialMovingAverage, optimize_sampling)
+   	simulate, PSNR, SSIM, posterior_sampling, get_disk_dist_ellipses_dataset, limited_angle_trafo, ExponentialMovingAverage, MayoDataset, LoDoPabDatasetFromDival)
 
 parser = argparse.ArgumentParser(description='Conditional Sampling.')
-parser.add_argument("--dataset", default='walnut', help="which dataset to use")
+parser.add_argument("--dataset", default='walnut', help="which dataset to use", choices=["walnut", "lodopab", "ellipses", "mayo"])
+parser.add_argument("--model", default="lodopab", help="which model to use", choices=["lodopab", "ellipses"])
 parser.add_argument("--penalty", default=1, help="penalty parameter")
 parser.add_argument("--smpl_start_prc", default=0)
-parser.add_argument("--smpl_mthd", default="dps", choices=['dps', 'naive'])
-
-parser.add_argument("--limited_angle", action='store_true')
-parser.add_argument("--angular_range", default=45)
-
-parser.add_argument("--sparse_view", action='store_true')
-parser.add_argument("--angles", default=30)
+parser.add_argument("--smpl_mthd", default="naive", choices=['dps', 'naive'])
 
 parser.add_argument("--ema", action='store_true')
 
@@ -32,31 +27,45 @@ parser.add_argument("--num_steps", default=1000)
 
 parser.add_argument("--walnut_trafo", action='store_true')
 
+parser.add_argument("--mayo_part", default="N", choices=['N', 'L', 'C'])
+
+
 def coordinator(args):
 
-	if args.dataset == "ellipses":
+	if args.model == "ellipses":
 		from configs.disk_ellipses_configs import get_config
-
-	elif args.dataset == "walnut":
-		from configs.walnut_configs import get_config
+	elif args.model == "lodopab":
+		from configs.lodopab_configs import get_config
 	else:
 		raise NotImplementedError
 
 	config = get_config()
 
-	# set up save path for results 
-	if args.limited_angle:
-		save_root = Path(f'./results/limited_angle/{args.dataset}/sampler={args.smpl_mthd}/sampling_steps={ceil(float(args.smpl_start_prc) * int(args.num_steps))}_to_{int(args.num_steps)}/penalty={args.penalty}/angular_range={args.angular_range}')
-	elif args.sparse_view:
-		save_root = Path(f'./results/sparse_view/{args.dataset}/sampler={args.smpl_mthd}/sampling_steps={ceil(float(args.smpl_start_prc) * int(args.num_steps))}_to_{int(args.num_steps)}/penalty={args.penalty}/angles={args.angles}')
+	if args.dataset == "ellipses":
+		from configs.disk_ellipses_configs import get_config
+	elif args.dataset == "lodopab":
+		from configs.lodopab_configs import get_config
+	elif args.dataset == "walnut":
+		from configs.walnut_configs import get_config
+	elif args.dataset == "mayo":
+		print("Apply model to mayo")
 	else:
-		save_root = Path(f'./results/{args.dataset}/sampler={args.smpl_mthd}/sampling_steps={ceil(float(args.smpl_start_prc) * int(args.num_steps))}_to_{int(args.num_steps)}/penalty={args.penalty}')
+		raise NotImplementedError
+
+	dataset_config = get_config()
+
+
+	# set up save path for results 
+	if args.dataset == "mayo":
+		save_root = Path(f'/localdata/AlexanderDenker/score_results/model={args.model}_dataset={args.dataset}/part={args.mayo_part}/sampler={args.smpl_mthd}/sampling_steps={ceil(float(args.smpl_start_prc) * int(args.num_steps))}_to_{int(args.num_steps)}/penalty={args.penalty}')
+	else:
+		save_root = Path(f'/localdata/AlexanderDenker/score_results/model={args.model}_dataset={args.dataset}/sampler={args.smpl_mthd}/sampling_steps={ceil(float(args.smpl_start_prc) * int(args.num_steps))}_to_{int(args.num_steps)}/penalty={args.penalty}')
 	save_root.mkdir(parents=True, exist_ok=True)
 
 	print("Start with penalty: ", float(args.penalty))
 
-	#if config.seed is not None:
-	#	torch.manual_seed(config.seed)  # for reproducible noise in simulate
+	if config.seed is not None:
+		torch.manual_seed(config.seed)  # for reproducible noise in simulate
 	
 	marginal_prob_std_fn = functools.partial(
       marginal_prob_std,
@@ -133,41 +142,7 @@ def coordinator(args):
 	else: 
 		raise NotImplementedError
 
-	if config.data.name == 'EllipseDatasetFromDival':
-
-		ellipse_dataset = EllipseDatasetFromDival(impl="astra_cuda")
-		dataset = ellipse_dataset.get_valloader(
-					batch_size=1,
-					num_data_loader_workers=0
-		)
-
-	elif config.data.name == 'DiskDistributedEllipsesDataset':
-    
-		dataset = get_disk_dist_ellipses_dataset(
-				fold='test', 
-				im_size=config.data.im_size, 
-				length=config.data.val_length,
-				diameter=config.data.diameter,
-				max_n_ellipse=config.data.num_n_ellipse, 
-				device=config.device
-			)
-			
-	elif config.data.name == 'Walnut':
-
-		dataset = get_walnut_data_on_device(config, ray_trafo_obj)
-	else:
-		raise NotImplementedError
-
-
-	if args.limited_angle:
-		ray_trafo = limited_angle_trafo(im_size=config.data.im_size, 
-							angular_range=int(args.angular_range))
-	elif args.sparse_view:
-		ray_trafo = simple_trafo(
-							im_size=config.data.im_size, 
-							num_angles=int(args.angles)
-		)
-	elif args.walnut_trafo:
+	if args.walnut_trafo:
 		from configs.walnut_configs import get_config
 		walnut_config = get_config()
 		ray_trafo = {}
@@ -183,51 +158,86 @@ def coordinator(args):
 		ray_trafo['ray_trafo_module'] = ray_trafo_obj
 		ray_trafo['fbp_module'] = ray_trafo_obj.fbp
 
+
+
+	if args.dataset == 'ellipses':
+    
+		dataset = get_disk_dist_ellipses_dataset(
+				fold='test', 
+				im_size=dataset_config.data.im_size, 
+				length=dataset_config.data.val_length,
+				diameter=dataset_config.data.diameter,
+				max_n_ellipse=dataset_config.data.num_n_ellipse, 
+				device=dataset_config.device
+			)
+			
+	elif args.dataset == 'walnut':
+
+		dataset = get_walnut_data_on_device(dataset_config, ray_trafo_obj)
+	elif args.dataset == "lodopab":
+		dataset = LoDoPabDatasetFromDival(im_size=dataset_config.data.im_size)
+		dataset = dataset.get_testloader(
+        		batch_size=1, 
+        		num_data_loader_workers=0)
+	elif args.dataset == "mayo":
+		print("USE MAYO DATASET")
+		dataset = MayoDataset(part=args.mayo_part)
+	else:
+		raise NotImplementedError
+
 	psnr_list = []
 	ssim_list = []
 
 	psnr_fbp_list = []
 	ssim_fbp_list = [] 
 	for i, data_sample in enumerate(islice(dataset, config.data.validation.num_images)):
-		if len(data_sample) == 2 and config.data.name == 'EllipseDatasetFromDival':
-			
-			_, ground_truth = data_sample
-			ground_truth = ground_truth.to(device=config.device)
-			observation, noise_level = simulate(
-					ground_truth,
-					ray_trafo['ray_trafo_module'],
-					white_noise_rel_stddev=config.data.stddev
-			)
-			filterbackproj = ray_trafo["fbp_module"](observation)
-
-		elif len(data_sample) == 3:
+		
+		if len(data_sample) == 3:
 
 			observation, ground_truth, filterbackproj = data_sample
 			ground_truth = ground_truth.to(device=config.device)
 			observation = observation.to(device=config.device)
 			filterbackproj = filterbackproj.to(device=config.device)
-
-			if args.limited_angle or args.sparse_view:
-				observation = simulate(
-				ground_truth,
-				ray_trafo['ray_trafo_module'],
-				white_noise_rel_stddev=config.data.stddev,
-				return_noise_level=False
-				)
-				filterbackproj = ray_trafo["fbp_module"](observation)
-
-		elif config.data.name == "DiskDistributedEllipsesDataset":
+		
+		if args.dataset == "ellipses":
 			ground_truth = data_sample
 			ground_truth = ground_truth.unsqueeze(0)
 			ground_truth = ground_truth.to(device=config.device)
 			observation, noise_level = simulate(
 					ground_truth,
 					ray_trafo['ray_trafo_module'],
-					white_noise_rel_stddev=config.data.stddev,
+					white_noise_rel_stddev=dataset_config.data.stddev,
 					return_noise_level=True
 			)
 			filterbackproj = ray_trafo["fbp_module"](observation)
-	
+
+		elif args.dataset == "lodopab":
+
+			ground_truth = data_sample
+			ground_truth = ground_truth.to(device=config.device)
+			observation, noise_level = simulate(
+					ground_truth,
+					ray_trafo['ray_trafo_module'],
+					white_noise_rel_stddev=dataset_config.data.stddev,
+					return_noise_level=True
+			)
+
+			filterbackproj = ray_trafo["fbp_module"](observation)
+		
+		elif args.dataset == "mayo":
+
+			ground_truth = data_sample
+			ground_truth = ground_truth.unsqueeze(0)
+
+			ground_truth = ground_truth.to(device=config.device)
+			observation, noise_level = simulate(
+					ground_truth,
+					ray_trafo['ray_trafo_module'],
+					white_noise_rel_stddev=0.05,
+					return_noise_level=True
+			)
+
+			filterbackproj = ray_trafo["fbp_module"](observation)
 
 		x_mean = posterior_sampling(
 							score_model=score_model, 
@@ -248,7 +258,7 @@ def coordinator(args):
 							ground_truth = ground_truth,
 							predictor = "euler_maruyama",
 							corrector = "langevin",
-							corrector_steps = 1, 
+							corrector_steps = 0, 
 							method = args.smpl_mthd)
 
 		
@@ -280,9 +290,9 @@ def coordinator(args):
 		
 		ax4.imshow(ground_truth[0,0,:,:].cpu() - x_mean[0,0,:,:].cpu(), cmap="gray")
 		ax4.set_title("Residual")
-		fig.savefig(f'penaly={args.penalty}.pdf')
+		#fig.savefig(f'penaly={args.penalty}.pdf')
 		fig.savefig(str(save_root / f'recon_{i}.png'))
-		plt.show()
+		#plt.show()
 		plt.close("all") 
 
 	print("MEAN PSNR: ", np.mean(psnr_list))
