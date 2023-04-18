@@ -547,3 +547,121 @@ def optimize_sampling(score_model,
 	
 	# The last step does not include any noise
 	return x_mean
+
+
+def cg_sampling(score_model, 
+                marginal_prob_std,
+                diffusion_coeff,
+                observation,
+                penalty,
+                ray_trafo,
+                img_shape,
+                batch_size, 
+                num_steps, 
+                snr,                
+                device='cuda',
+                start_time_step = 0,
+                eps=1e-3,
+                x_fbp = None,
+				log_dir = None, 
+				num_img_log=10,
+				log_freq=10,
+				ground_truth = None,
+				time_schedule = 'linear'):
+
+	''' Based on ``DPS'' TODO '''
+
+	if not log_dir == None:
+		writer = SummaryWriter(log_dir=log_dir)
+
+		log_img_interval = (num_steps - start_time_step)/num_img_log
+
+	if time_schedule == "linear":
+		time_steps = torch.linspace(1., eps, num_steps + 1)
+	else:
+		rho = 7
+		ramp = torch.linspace(0, 1, num_steps + 1)
+		time_steps = (1 + ramp*(eps**(1/rho) - 1))**rho
+
+
+	if start_time_step == 0:
+		t = torch.ones(batch_size, device=device)
+		init_x = torch.randn(batch_size, *img_shape, device=device) * marginal_prob_std(t)[:, None, None, None]
+	else:
+		if x_fbp == None:
+			x_fbp = ray_trafo["fbp_module"](observation/torch.max(observation))
+		std = marginal_prob_std(torch.ones(batch_size, device=device) * time_steps[start_time_step])
+		z = torch.randn(batch_size, *img_shape, device=device)
+		init_x = x_fbp + z * std[:, None, None, None]
+
+	if not log_dir == None:
+		init_x_grid = torchvision.utils.make_grid(init_x, normalize=True, scale_each=True)		
+		writer.add_image("init_x", init_x_grid, global_step=0)
+
+		if not x_fbp == None:
+			fbp_grid = torchvision.utils.make_grid(x_fbp, normalize=True, scale_each=True)		
+			writer.add_image("fbp", fbp_grid, global_step=0)
+
+	x_fbp = ray_trafo["fbp_module"](observation/torch.max(observation))
+	y_odl = ray_trafo["ray_trafo"].range.element(observation[0,0,:,:].cpu().numpy())
+
+	x = init_x 
+	for i in tqdm(range(start_time_step, num_steps)):     
+		time_step = time_steps[i]
+		batch_time_step = torch.ones(batch_size, device=device) * time_step
+		
+		step_size = torch.abs(time_steps[i+1] - time_steps[i])
+
+		# cg step 
+		x_cg = torch.clone(x)
+		x_cg_odl = ray_trafo["ray_trafo"].domain.element(x[0,0,:,:].cpu().numpy())
+		conjugate_gradient_normal(ray_trafo["ray_trafo"], x_cg_odl, y_odl, niter=4)
+
+		x_proj = torch.from_numpy(np.asarray(x_cg_odl)).to(x.device)
+		x_proj = x_proj.unsqueeze(0).unsqueeze(0)/torch.max(observation)
+
+		l = 0.
+		x = l*x + (1-l)*x_proj
+
+		x = x.requires_grad_()
+		with torch.no_grad():
+			s = score_model(x, batch_time_step) 
+		
+		# Predictor step (Euler-Maruyama)
+		g = diffusion_coeff(batch_time_step)
+		x_mean = x + (g**2)[:, None, None, None] * s  * step_size 
+		x = x_mean + torch.sqrt(g**2 * step_size)[:, None, None, None] * torch.randn_like(x)      
+
+		x = x.detach()
+		x_mean = x_mean.detach()
+
+		with torch.no_grad():
+			
+			snr = 0.16
+			batch_time_step = torch.ones(batch_size, device=device) * time_step
+			# Corrector step (Langevin MCMC)
+			grad = score_model(x, batch_time_step)
+			grad_norm = torch.norm(grad.reshape(grad.shape[0], -1), dim=-1).mean()
+			noise_norm = np.sqrt(np.prod(x.shape[1:]))
+			langevin_step_size = 2 * (snr * noise_norm / grad_norm)**2
+			x_mean = x + langevin_step_size * grad 
+			x = x_mean + torch.sqrt(2 * langevin_step_size) * torch.randn_like(x)     
+
+		# The last step does not include any noise
+
+		if not log_dir == None:
+			if (i - start_time_step) % log_img_interval == 0:
+				x_grid = torchvision.utils.make_grid(x, normalize=True, scale_each=True)		
+				writer.add_image("reco_at_step", x_grid, global_step=i)
+
+			if i % log_freq == 0:
+				psnr = PSNR(x[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
+				ssim = SSIM(x[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
+				writer.add_scalar("PSNR", psnr, global_step=i)
+				writer.add_scalar("SSIM", ssim, global_step=i)
+
+	if not log_dir == None:
+		x_grid = torchvision.utils.make_grid(x_mean, normalize=True, scale_each=True)		
+		writer.add_image("reco_at_step", x_grid, global_step=num_steps)
+
+	return x_mean
