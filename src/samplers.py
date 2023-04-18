@@ -6,6 +6,8 @@ from scipy import integrate
 from torch.utils.tensorboard import SummaryWriter
 import torchvision
 
+from odl.solvers.iterative.iterative import conjugate_gradient_normal
+
 from .utils import PSNR, SSIM
 
 
@@ -35,9 +37,9 @@ def posterior_sampling(score_model,
 	"""
 	method = "naive": Jalal et al. (2020) https://arxiv.org/pdf/2209.14687.pdf
 	method = "dps": Chung et al. (2022) https://proceedings.neurips.cc/paper/2020/file/07cb5f86508f146774a2fac4373a8e50-Paper.pdf
-
+	method = "dds": Chung et al. (2023) https://arxiv.org/pdf/2303.05754.pdf
 	"""
-	assert method in ["naive", "dps"], f"method {method} is not supported. Use *naive* or *dps*."
+	assert method in ["naive", "dps", "dds"], f"method {method} is not supported. Use *naive*, *dps* or *dds*."
 
 	if not log_dir == None:
 		writer = SummaryWriter(log_dir=log_dir)
@@ -146,13 +148,35 @@ def posterior_sampling(score_model,
 				x = x.detach()
 				x_mean = x_mean.detach()
 
+			elif method == "dds":
+				"THIS IS NOT THE DDS IMPLEMENTATION FROM THE PAPER. IT USES CG AS A PROJECTION STEP."
+				y_odl = ray_trafo["ray_trafo"].range.element(observation[0,0,:,:].cpu().numpy())
+					
+				# cg step 
+				x_cg = torch.clone(x)
+				x_cg_odl = ray_trafo["ray_trafo"].domain.element(x[0,0,:,:].cpu().numpy())
+				conjugate_gradient_normal(ray_trafo["ray_trafo"], x_cg_odl, y_odl, niter=4)
+
+				x_proj = torch.from_numpy(np.asarray(x_cg_odl)).to(x.device)
+				x_proj = x_proj.unsqueeze(0).unsqueeze(0)
+
+				x = x_proj
+
+				with torch.no_grad():
+					s = score_model(x, batch_time_step) 
+					
+					# Predictor step (Euler-Maruyama)
+					g = diffusion_coeff(batch_time_step)
+					x_mean = x + (g**2)[:, None, None, None] * s  * step_size 
+					x = x_mean + torch.sqrt(g**2 * step_size)[:, None, None, None] * torch.randn_like(x)      
+
 		if not log_dir == None:
 			if (i - start_time_step) % log_img_interval == 0:
 				x_grid = torchvision.utils.make_grid(x, normalize=True, scale_each=True)		
 				writer.add_image("reco_at_step", x_grid, global_step=i)
 
 			if i % log_freq == 0:
-				writer.add_scalar("|Ax-y|", norm.item(), global_step=i)
+				#writer.add_scalar("|Ax-y|", norm.item(), global_step=i)
 				psnr = PSNR(x[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
 				ssim = SSIM(x[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
 				writer.add_scalar("PSNR", psnr, global_step=i)

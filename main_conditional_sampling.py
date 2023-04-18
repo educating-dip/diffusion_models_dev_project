@@ -19,7 +19,7 @@ parser.add_argument("--dataset", default='walnut', help="which dataset to use", 
 parser.add_argument("--model", default="lodopab", help="which model to use", choices=["lodopab", "ellipses"])
 parser.add_argument("--penalty", default=1, help="penalty parameter")
 parser.add_argument("--smpl_start_prc", default=0)
-parser.add_argument("--smpl_mthd", default="naive", choices=['dps', 'naive'])
+parser.add_argument("--smpl_mthd", default="naive", choices=['dps', 'naive', 'dds'])
 
 parser.add_argument("--ema", action='store_true')
 
