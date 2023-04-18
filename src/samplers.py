@@ -569,7 +569,7 @@ def cg_sampling(score_model,
 				ground_truth = None,
 				time_schedule = 'linear'):
 
-	''' Based on ``DPS'' TODO '''
+	''' Based on ``DPS'' https://arxiv.org/pdf/2303.05754.pdf '''
 
 	if not log_dir == None:
 		writer = SummaryWriter(log_dir=log_dir)
