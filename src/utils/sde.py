@@ -119,7 +119,7 @@ class VPSDE(SDE):
 	
 		"""
 		std = self.marginal_prob_std(t)
-		log_mean_coeff = -0.25 * t ** 2 * (self.beta_1 - self.beta_0) - 0.5 * t * self.beta_0
+		log_mean_coeff = -0.25 * t ** 2 * (self.beta_max - self.beta_min) - 0.5 * t * self.beta_min
 		mean = torch.exp(log_mean_coeff[:, None, None, None]) * x		
 		return mean, std
 
@@ -128,7 +128,7 @@ class VPSDE(SDE):
 		standard deviation of p_{0t}(x(t) | x(0)) is used:
 			- in the UNET as a scaling of the output 
 		"""
-		log_mean_coeff = -0.25 * t ** 2 * (self.beta_max - self.beta_min) - 0.5 * t * self.beta_max
+		log_mean_coeff = -0.25 * t ** 2 * (self.beta_max - self.beta_min) - 0.5 * t * self.beta_min
 		std = torch.sqrt(1. - torch.exp(2. * log_mean_coeff))
 		return std 
 
