@@ -28,7 +28,7 @@ def score_model_simple_trainer(
 		for idx, batch in tqdm(enumerate(train_dl), total = len(train_dl)):
 
 			x = batch.to(device)
-			loss = loss_fn(score_model, x, sde.marginal_prob_std)
+			loss = loss_fn(score_model, x, sde)
 			optimizer.zero_grad()
 			loss.backward()    
 			optimizer.step()
