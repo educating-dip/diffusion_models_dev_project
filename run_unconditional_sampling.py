@@ -1,32 +1,21 @@
 import os
+import torch
 import argparse
-from pathlib import Path
-
-import torch 
 import functools
-import numpy as np 
-import matplotlib.pyplot as plt 
-import yaml 
-from itertools import islice
-from math import ceil
+import matplotlib.pyplot as plt
 
-from itertools import islice
-from src import (marginal_prob_std, diffusion_coeff, OpenAiUNetModel, get_disk_dist_ellipses_dataset, pc_sampler_unconditional, ExponentialMovingAverage)
+from src import (marginal_prob_std, diffusion_coeff, OpenAiUNetModel, 
+		pred_cor_uncond_sampling, ExponentialMovingAverage)
 
-parser = argparse.ArgumentParser(description='Unconditional Sampling.')
+parser = argparse.ArgumentParser(description='unconditional sampling')
 parser.add_argument("--num_steps", default=1000)
-
 parser.add_argument("--batch_size", default=6)
-
 parser.add_argument("--ema", action='store_true')
 
 def coordinator(args):
 
 	from configs.disk_ellipses_configs import get_config
-
-
 	config = get_config()
-
 
 	if config.seed is not None:
 		torch.manual_seed(config.seed)  # for reproducible noise in simulate
@@ -34,17 +23,13 @@ def coordinator(args):
 	marginal_prob_std_fn = functools.partial(
       marginal_prob_std,
       sigma_min=config.sde.sigma_min, 
-	  sigma_max=config.sde.sigma_max
-    )
+	  sigma_max=config.sde.sigma_max)
 	diffusion_coeff_fn = functools.partial(
       diffusion_coeff, 
       sigma_min=config.sde.sigma_min, 
-	  sigma_max=config.sde.sigma_max
-    )
+	  sigma_max=config.sde.sigma_max)
 	
-	# TODO: getter model func and saving/loading funcs
 	if config.model.model_name == 'OpenAiUNetModel':
-
 		score_model = OpenAiUNetModel(
                     image_size=config.data.im_size,
                     in_channels=config.model.in_channels,
@@ -61,33 +46,24 @@ def coordinator(args):
                     num_heads_upsample=config.model.num_heads_upsample,
                     use_scale_shift_norm=config.model.use_scale_shift_norm,
                     resblock_updown=config.model.resblock_updown,
-                    use_new_attention_order=config.model.use_new_attention_order
-                    )
-		
-
+                    use_new_attention_order=config.model.use_new_attention_order)
 	else:
-		
 		raise NotImplementedError
 
 
 	if (config.sampling.load_model_from_path is not None) and (config.sampling.model_name is not None): 
-		print("Load Score Model...")
+		print("load score model from path")
 		if args.ema:
 			ema = ExponentialMovingAverage(score_model.parameters(), decay=0.999)
 			ema.load_state_dict(torch.load(os.path.join(config.sampling.load_model_from_path,"ema_model.pt")))
 			ema.copy_to(score_model.parameters())
-
 		else:
 			score_model.load_state_dict(torch.load(
-				os.path.join(config.sampling.load_model_from_path, config.sampling.model_name))
-			)
-
-
+				os.path.join(config.sampling.load_model_from_path, config.sampling.model_name))	)
 
 	score_model = score_model.to(config.device)
 	score_model.eval()
-
-	x_mean = pc_sampler_unconditional(
+	x_mean = pred_cor_uncond_sampling(
 				score_model=score_model, 
 				marginal_prob_std=marginal_prob_std_fn, 
 				diffusion_coeff=diffusion_coeff_fn, 
@@ -98,15 +74,11 @@ def coordinator(args):
 				device=config.device, 
 				eps=config.sampling.eps)
 
-	print(x_mean.shape)
 
-	fig, axes = plt.subplots(1, x_mean.shape[0])
-
+	_, axes = plt.subplots(1, x_mean.shape[0])
 	for idx, ax in enumerate(axes.ravel()):
-
 		ax.imshow(x_mean[idx, 0,:,:].cpu(), cmap="gray")
 		ax.axis("off")
-
 	plt.show()
 
 if __name__ == '__main__':

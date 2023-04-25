@@ -168,26 +168,24 @@ def get_walnut_2d_inner_part_defined_by_patch_size(patch_size: int) -> Tuple[sli
             (patch_slice_1.stop * patch_size if patch_slice_1.stop < num_patches_1 else VOL_SZ[2]))
     return slice_0, slice_1
 
+def get_walnut_data(config, ray_trafo):
 
-def get_walnut_data_on_device(config, ray_trafo):
+    noisy_observation = get_walnut_2d_observation(
+        data_path=config.data.data_path,
+        walnut_id=config.data.walnut_id, orbit_id=config.forward_op.orbit_id,
+        angular_sub_sampling=config.forward_op.angular_sub_sampling,
+        proj_col_sub_sampling=config.forward_op.proj_col_sub_sampling,
+        scaling_factor=config.data.scaling_factor).to(device=config.device)
+    ground_truth = get_walnut_2d_ground_truth(
+        data_path=config.data.data_path,
+        walnut_id=config.data.walnut_id, orbit_id=config.forward_op.orbit_id,
+        scaling_factor=config.data.scaling_factor).to(device=config.device)
 
-		noisy_observation = get_walnut_2d_observation(
-				data_path=config.data.data_path,
-				walnut_id=config.data.walnut_id, orbit_id=config.forward_op.orbit_id,
-				angular_sub_sampling=config.forward_op.angular_sub_sampling,
-				proj_col_sub_sampling=config.forward_op.proj_col_sub_sampling,
-				scaling_factor=config.data.scaling_factor).to(device=config.device)
-    
-		ground_truth = get_walnut_2d_ground_truth(
-            data_path=config.data.data_path,
-            walnut_id=config.data.walnut_id, orbit_id=config.forward_op.orbit_id,
-            scaling_factor=config.data.scaling_factor).to(device=config.device)
-    
-		filtbackproj = ray_trafo.fbp(
-            noisy_observation[None].to(device=config.device))[0].to(device=config.device)
-    
-		return torch.utils.data.TensorDataset(  # include batch dims
-            noisy_observation[None, None], ground_truth[None, None], filtbackproj[None, None])
-		
+    filtbackproj = ray_trafo.fbp(
+        noisy_observation[None].to(device=config.device))[0].to(device=config.device)
+
+    return torch.utils.data.TensorDataset(  # include batch dims
+        noisy_observation[None, None], ground_truth[None, None], filtbackproj[None, None])
+
 
 		 

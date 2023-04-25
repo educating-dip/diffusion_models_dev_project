@@ -4,12 +4,12 @@ import ml_collections
 def get_default_configs():
 
     config = ml_collections.ConfigDict()
-    config.device = "cuda"
+    config.device = 'cuda'
     config.seed = 1
 
     # sde configs
     config.sde = sde = ml_collections.ConfigDict()
-    sde.type = "vesde"
+    sde.type = 'vesde'
     #sde.sigma = 25.0
     # the largest noise scale sigma_max was choosen according to Technique 1 from [https://arxiv.org/pdf/2006.09011.pdf], 
     # i.e. to be as large as the maximum eucledian distance between pairs of data -> ~100
@@ -37,9 +37,9 @@ def get_default_configs():
     config.sampling = sampling = ml_collections.ConfigDict()
     sampling.batch_size = 1
     sampling.snr = 0.05
-    sampling.num_steps = 2000 #2000
+    sampling.num_steps = 2000
     sampling.eps = 1e-3
-    sampling.sampling_strategy = "predictor_corrector"
+    sampling.sampling_strategy = 'predictor'
     sampling.start_time_step = 0
     
     # data configs - specify in other configs

@@ -1,66 +1,50 @@
 import os
-import torch 
-import functools 
-import numpy as np 
-import matplotlib.pyplot as plt 
-import numpy as np 
-from datetime import datetime 
-import yaml 
+import yaml
+import torch
+import functools
 
-from src import (loss_fn, ExponentialMovingAverage, marginal_prob_std, diffusion_coeff, 
-  OpenAiUNetModel, EllipseDatasetFromDival, get_disk_dist_ellipses_dataset, score_model_simple_trainer, get_one_ellipses_dataset)
+from datetime import datetime
+from src import (marginal_prob_std, diffusion_coeff, OpenAiUNetModel, 
+                      EllipseDatasetFromDival, get_disk_dist_ellipses_dataset, 
+                            score_model_simple_trainer, get_one_ellipses_dataset)
 
-
-#from configs.ellipses_configs import get_config
 from configs.disk_ellipses_configs import get_config
 
 def coordinator():
 
   config = get_config()
   marginal_prob_std_fn = functools.partial(
-      marginal_prob_std, 
-      sigma_min=config.sde.sigma_min,
-      sigma_max=config.sde.sigma_max
-
-    )
+      marginal_prob_std, sigma_min=config.sde.sigma_min,
+      sigma_max=config.sde.sigma_max)
   diffusion_coeff_fn = functools.partial(
-      diffusion_coeff, 
-      sigma_min=config.sde.sigma_min,
-      sigma_max=config.sde.sigma_max
-    )
+      diffusion_coeff, sigma_min=config.sde.sigma_min,
+      sigma_max=config.sde.sigma_max)
 
   if config.data.name == 'EllipseDatasetFromDival':
-    
-    ellipse_dataset = EllipseDatasetFromDival(
-        impl="astra_cuda"
-      )
+    #TODO: implement getter for datasets
+    ellipse_dataset = EllipseDatasetFromDival(impl="astra_cuda")
     train_dl = ellipse_dataset.get_trainloader(
-        batch_size=config.training.batch_size, 
-        num_data_loader_workers=0
-      )
-
+          batch_size=config.training.batch_size, num_data_loader_workers=0)
   elif config.data.name == 'DiskDistributedEllipsesDataset':
     if config.data.num_n_ellipse > 1:
       dataset = get_disk_dist_ellipses_dataset(
-              fold='train', 
+              fold='train',
               im_size=config.data.im_size, 
               length=config.data.length,
               diameter=config.data.diameter,
-              max_n_ellipse=config.data.num_n_ellipse, 
-              device=config.device
-            )
+              max_n_ellipse=config.data.num_n_ellipse,
+              device=config.device)
     else:
       dataset = get_one_ellipses_dataset(
-              fold='train', 
-              im_size=config.data.im_size, 
+              fold='train',
+              im_size=config.data.im_size,
               length=config.data.length,
               diameter=config.data.diameter,
-              device=config.device
-            )
+              device=config.device)
     train_dl = torch.utils.data.DataLoader(dataset, batch_size=3, shuffle=False)
-
-  if config.model.model_name == 'OpenAiUNetModel': 
-
+  
+  if config.model.model_name == 'OpenAiUNetModel':
+    # TODO: implement getter for models
     score_model = OpenAiUNetModel(
                     image_size=config.data.im_size,
                     in_channels=config.model.in_channels,
@@ -77,22 +61,17 @@ def coordinator():
                     num_heads_upsample=config.model.num_heads_upsample,
                     use_scale_shift_norm=config.model.use_scale_shift_norm,
                     resblock_updown=config.model.resblock_updown,
-                    use_new_attention_order=config.model.use_new_attention_order
-                    )
+                    use_new_attention_order=config.model.use_new_attention_order)
   else:
-
     raise NotImplementedError 
-                  
-  print(f" # Parameters: {sum([p.numel() for p in score_model.parameters()]) }")
-  today = datetime.now()
-  log_dir = '/localdata/AlexanderDenker/score_based_baseline/checkpoints/' + today.strftime('%Y_%m_%d_%H:%m')
-
+  
+  log_dir = './score_based_baseline/checkpoints/' + datetime.now().strftime('%Y_%m_%d_%H:%m')
   if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 
   with open(os.path.join(log_dir,'report.yaml'), 'w') as file:
-    documents = yaml.dump(config, file)
-  
+    yaml.dump(config, file)
+
   score_model_simple_trainer(
     score_model=score_model.to(config.device),
     marginal_prob_std_fn=marginal_prob_std_fn,
@@ -114,9 +93,7 @@ def coordinator():
       },
     device=config.device,
     log_dir=log_dir
-  )
+    )
 
-
-if __name__ == '__main__': 
-
+if __name__ == '__main__':
   coordinator()

@@ -12,18 +12,14 @@ from typing import Union, Sequence, Iterable, Optional, Any, Tuple, Iterator
 def simulate(x: Tensor, ray_trafo, white_noise_rel_stddev: float, rng  = None, return_noise_level: bool = False):
 
     observation = ray_trafo(x)
-
     if rng is None:
         rng = np.random.default_rng()
-    
     noise_level = white_noise_rel_stddev * torch.mean(torch.abs(observation)).item()
     noise = torch.from_numpy(rng.normal(
-            scale=noise_level,
-            size=observation.shape)).to(
-                    dtype=observation.dtype, device=observation.device)
+        scale=noise_level,
+        size=observation.shape)).to(dtype=observation.dtype, device=observation.device)
     
     noisy_observation = observation + noise
-
     return (noisy_observation, noise_level) if return_noise_level else noisy_observation
 
 class SimulatedDataset(torch.utils.data.Dataset):

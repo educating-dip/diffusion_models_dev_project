@@ -1,73 +1,48 @@
 import odl
 import numpy as np
 
+from torch import Tensor 
 from odl import uniform_discr
 from odl.contrib.torch import OperatorModule
 from odl.discr import uniform_partition
 
-def simple_trafo(
-	im_size, 
-	num_angles,
-	): 
+from  .base_ray_trafo import BaseRayTrafo
 
-	ray_trafo = {}
+class SimpleTrafo(BaseRayTrafo):
+	def __init__(self, im_shape, num_angles):
+		domain = uniform_discr(
+				[-im_shape[0]//2, -im_shape[1]//2],
+				[im_shape[0]//2, im_shape[1]//2],
+				(im_shape[0],im_shape[1]),
+				dtype=np.float32
+			)
 
-	domain = uniform_discr([-im_size//2, -im_size//2], [im_size//2, im_size//2], (im_size,im_size) , dtype=np.float32)
+		geometry = odl.tomo.parallel_beam_geometry(
+			domain, num_angles=num_angles)
+		self._angles = geometry.angles
 
-	geometry = odl.tomo.parallel_beam_geometry(
-		domain, num_angles=num_angles
-		)
-	ray_trafo_op = odl.tomo.RayTransform(
-		domain, 
-		geometry, 
-		impl="astra_cuda"
-		)
-	ray_trafo_op_module = OperatorModule(ray_trafo_op)
-	ray_trafo_adjoint_op_module = OperatorModule(ray_trafo_op.adjoint)
+		ray_trafo_op = odl.tomo.RayTransform(
+			domain, geometry, impl='astra_cuda')
+		obs_shape = ray_trafo_op.range
+		super().__init__(im_shape=im_shape, obs_shape=obs_shape)
 
-	ray_trafo['ray_trafo'] = ray_trafo_op
-	ray_trafo['ray_trafo_module'] = ray_trafo_op_module
-	ray_trafo['ray_trafo_adjoint_module'] = ray_trafo_adjoint_op_module
-	ray_trafo['fbp_module'] = OperatorModule(odl.tomo.analytic.filtered_back_projection.fbp_op(ray_trafo_op, frequency_scaling=0.75, filter_type='Hann'))
-	return ray_trafo
+		self.ray_trafo_op_fun = OperatorModule(ray_trafo_op)
+		self.ray_trafo_adjoint_op_fun = OperatorModule(ray_trafo_op.adjoint)
+		self.fbp_fun = OperatorModule(odl.tomo.fbp_op(ray_trafo_op))
 
-def limited_angle_trafo(im_size, angular_range):
+	@property
+	def angles(self) -> np.ndarray:
+		""":class:`np.ndarray` : The angles (in radian)."""
+		return self._angles
 
-	ray_trafo = {}
+	def trafo(self, x: Tensor):
+		return self.ray_trafo_op_fun(x)
 
-	space = uniform_discr([-im_size//2, -im_size//2], [im_size//2, im_size//2], (im_size,im_size) , dtype=np.float32)
+	def trafo_adjoint(self, x: Tensor):
+		return self.ray_trafo_adjoint_op_fun(x)
 
+	trafo_flat = BaseRayTrafo._trafo_flat_via_trafo
+	trafo_adjoint_flat = BaseRayTrafo._trafo_adjoint_flat_via_trafo_adjoint
 
-	corners = space.domain.corners()[:, :2]
-	rho = np.max(np.linalg.norm(corners, axis=1))
-
-	min_side = min(space.partition.cell_sides[:2])
-	omega = np.pi / min_side
-	num_px_horiz = 2 * int(np.ceil(rho * omega / np.pi)) + 1
-
-	det_min_pt = -rho
-	det_max_pt = rho
-	
-	det_shape = num_px_horiz
-	num_angles = int(angular_range/180*np.ceil(omega * rho))
-
-	angle_partition = uniform_partition(0, angular_range*np.pi/180, num_angles)
-	det_partition = uniform_partition(det_min_pt, det_max_pt, det_shape)
-
-	geometry = odl.tomo.geometry.parallel.Parallel2dGeometry(angle_partition, det_partition)
-
-
-	ray_trafo_op = odl.tomo.RayTransform(
-		space, 
-		geometry, 
-		impl="astra_cuda"
-		)
-	ray_trafo_op_module = OperatorModule(ray_trafo_op)
-	ray_trafo_adjoint_op_module = OperatorModule(ray_trafo_op.adjoint)
-
-	ray_trafo['ray_trafo'] = ray_trafo_op
-	ray_trafo['ray_trafo_module'] = ray_trafo_op_module
-	ray_trafo['ray_trafo_adjoint_module'] = ray_trafo_adjoint_op_module
-	ray_trafo['fbp_module'] = OperatorModule(odl.tomo.analytic.filtered_back_projection.fbp_op(ray_trafo_op, frequency_scaling=0.75, filter_type='Hann'))
-	return ray_trafo
- 
+	def fbp(self, x: Tensor):
+		return self.fbp_fun(x)
