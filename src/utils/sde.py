@@ -88,3 +88,15 @@ class VESDE(SDE):
 		return torch.randn(*shape) * self.sigma_max
 
 
+# TODO 
+class VPSDE(SDE):
+	def __init__(self, beta_min, beta_max)
+	"""Construct a Variance Preserving SDE.
+	Args:
+		beta_min: value of beta(0)
+		beta_max: value of beta(1)
+
+    """
+	super().__init__()
+	self.beta_min = beta_min
+	self.beta_max = beta_max

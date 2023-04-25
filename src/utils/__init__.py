@@ -1,4 +1,4 @@
-from .sde import SDE, _marginal_prob_std, _diffusion_coeff
+from .sde import VESDE, VPSDE
 from .ema import ExponentialMovingAverage
 from .losses import loss_fn
 from .metrics import PSNR, SSIM

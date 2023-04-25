@@ -4,7 +4,7 @@ import torch
 import functools
 
 from datetime import datetime
-from src import (SDE, marginal_prob_std, diffusion_coeff, OpenAiUNetModel, 
+from src import (get_sde, marginal_prob_std, diffusion_coeff, OpenAiUNetModel, 
 				EllipseDatasetFromDival, get_disk_dist_ellipses_dataset, 
 				score_model_simple_trainer, get_one_ellipses_dataset,
 				get_standard_score)
@@ -18,7 +18,7 @@ def coordinator(args):
 		from configs.lodopab_configs import get_config
 
 	config = get_config()
-	sde = SDE(sigma_max=config.sde.sigma_max, sigma_min=config.sde.sigma_min, device=config.device)
+	sde = get_sde(config=config)
 
 	print("DATASET: ", config.data.name)
 	if config.data.name == 'EllipseDatasetFromDival':

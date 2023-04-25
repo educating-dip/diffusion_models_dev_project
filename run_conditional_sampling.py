@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import islice
 from itertools import islice
-from src import (SDE, PSNR, SSIM, get_standard_dataset, get_data_from_ground_truth, get_standard_ray_trafo,  
+from src import (get_sde, PSNR, SSIM, get_standard_dataset, get_data_from_ground_truth, get_standard_ray_trafo,  
 	get_standard_score, get_standard_sampler, get_standard_configs, get_standard_path) 
 
 parser = argparse.ArgumentParser(description='conditional sampling')
@@ -32,7 +32,7 @@ def coordinator(args):
 		in ``SCORE-BASED GENERATIVE MODELING THROUGH STOCHASTIC DIFFERENTIAL EQUATIONS'' 
 		at https://arxiv.org/pdf/2011.13456.pdf. 
 	'''
-	sde = SDE(sigma_max=config.sde.sigma_max, sigma_min=config.sde.sigma_min, device=config.device)
+	sde = get_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=args.ema)
 	score = score.to(config.device)
 	score.eval()

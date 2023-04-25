@@ -10,6 +10,7 @@ from ..dataset import LoDoPabDatasetFromDival, MayoDataset, get_disk_dist_ellips
 from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
 from ..samplers import BaseSampler, Euler_Maruyama_VE_sde_predictor, Langevin_VE_sde_corrector, chain_simple_init, decomposed_diffusion_sampling_VE_sde_predictor, conj_grad_closure
 from ..third_party_models import OpenAiUNetModel
+from .sde import VESDE, VPSDE
 
 def get_standard_score(config, sde, use_ema, load_model=True):
 
@@ -45,6 +46,16 @@ def get_standard_score(config, sde, use_ema, load_model=True):
             score.load_state_dict(torch.load(os.path.join(config.sampling.load_model_from_path, config.sampling.model_name)))
 
     return score
+
+def get_sde(config):
+    if config.sde.type = "vesde":
+        sde = VESDE(sigma_min=config.sde.sigma_min, sigma_max=config.sde.sigma_max)
+    elif config.sde.type = "vpsde":
+        sde = VPSDE(beta_min=config.sde.beta_min, beta_max=config.sde.beta_max)
+    else:
+        raise NotImplementedError
+
+    return sde
 
 def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, filtbackproj=None, device=None):
 
