@@ -16,10 +16,6 @@ def get_config():
     data.name = 'LoDoPabCT'
     data.im_size = 362
 
-    data.validation = validation = ml_collections.ConfigDict()
-    validation.num_images = 5
-
-
     config.sde.type = 'vpsde'
 
     config.sde.beta_min = 0.1
@@ -29,12 +25,14 @@ def get_config():
     config.sampling.load_model_from_path = None #'/localdata/AlexanderDenker/score_based_baseline/LoDoPabCT/checkpoints/2023_04_12_10:04' #2023_02_22_10:02"
     config.sampling.model_name = 'model.pt'
 
+    config.validation.num_steps = 500
+    
     config.model = model = ml_collections.ConfigDict()
     model.n_iter = 4
     model.n_primal = 4
     model.n_dual = 4
     model.n_layer = 6
-    model.internal_ch = 64
+    model.internal_ch = 32
     model.kernel_size = 3
     model.batch_norm = True
 

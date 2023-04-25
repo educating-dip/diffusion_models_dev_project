@@ -132,6 +132,7 @@ def simple_cond_sampler(score_model, sde, img_shape, y, num_steps, snr, eps):
 	time_steps = np.linspace(1., eps, num_steps)
 	step_size = time_steps[0] - time_steps[1]
 
+	x = init_x
 	with torch.no_grad():
 		for time_step in tqdm(time_steps):
 			batch_time_step = torch.ones(batch_size, device=y.device) * time_step
