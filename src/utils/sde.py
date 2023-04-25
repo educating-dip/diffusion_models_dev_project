@@ -88,7 +88,6 @@ class VESDE(SDE):
 		return torch.randn(*shape) * self.sigma_max
 
 
-# TODO 
 class VPSDE(SDE):
 	def __init__(self, beta_min, beta_max)
 	"""Construct a Variance Preserving SDE.
@@ -100,3 +99,36 @@ class VPSDE(SDE):
 	super().__init__()
 	self.beta_min = beta_min
 	self.beta_max = beta_max
+
+	def diffusion_coeff(self, t)
+		beta_t = self.beta_min + t*(self.beta_max - self.beta_min)
+		return torch.sqrt(beta_t)
+
+	def sde(self, x, t):
+		beta_t = self.beta_min + t*(self.beta_max - self.beta_min)
+		drift = -0.5 * beta_t[:, None, None, None] * x 
+
+		diffusion = self.diffusion_coeff(t)
+		return drift, diffusion
+
+	def marginal_prob(self, x, t):
+		"""
+		mean and standard deviation of p_{0t}(x(t) | x(0))
+	
+		"""
+		std = self.marginal_prob_std(t)
+		log_mean_coeff = -0.25 * t ** 2 * (self.beta_1 - self.beta_0) - 0.5 * t * self.beta_0
+		mean = torch.exp(log_mean_coeff[:, None, None, None]) * x		
+    	return mean, std
+
+	def marginal_prob_std(self, t):
+		"""
+		standard deviation of p_{0t}(x(t) | x(0)) is used:
+			- in the UNET as a scaling of the output 
+		"""
+		log_mean_coeff = -0.25 * t ** 2 * (self.beta_max - self.beta_min) - 0.5 * t * self.beta_max
+		std = torch.sqrt(1. - torch.exp(2. * log_mean_coeff))
+		return std 
+
+	def prior_sampling(self, shape):
+		return torch.randn(*shape) 
