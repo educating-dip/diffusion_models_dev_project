@@ -10,7 +10,11 @@ from src import (marginal_prob_std, diffusion_coeff, OpenAiUNetModel,
 
 from configs.disk_ellipses_configs import get_config
 
-def coordinator():
+def coordinator(args):
+  if args.dataset == "ellipses":
+    from configs.disk_ellipses_configs import get_config
+  elif args.dataset == "lodopab":
+    from configs.lodopab_configs import get_config
 
   config = get_config()
   marginal_prob_std_fn = functools.partial(
@@ -20,6 +24,7 @@ def coordinator():
       diffusion_coeff, sigma_min=config.sde.sigma_min,
       sigma_max=config.sde.sigma_max)
 
+  print("DATASET: ", config.data.name)
   if config.data.name == 'EllipseDatasetFromDival':
     #TODO: implement getter for datasets
     ellipse_dataset = EllipseDatasetFromDival(impl="astra_cuda")
