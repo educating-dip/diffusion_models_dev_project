@@ -21,6 +21,13 @@ class SDE(abc.ABC):
 		super().__init__()
 
 	@abc.abstractmethod
+	def diffusion_coeff(self, t):
+		"""
+		Outputs f
+		"""
+		pass
+
+	@abc.abstractmethod
 	def sde(self, x, t):
 		"""
 		Outputs f and G
@@ -54,7 +61,7 @@ class VESDE(SDE):
 		self.sigma_min = sigma_min
 		self.sigma_max = sigma_max
 
-	def diffusion_coeff(self, t)
+	def diffusion_coeff(self, t):
 		sigma = self.sigma_min * (self.sigma_max / self.sigma_min) ** t
 		diffusion = sigma * torch.sqrt(torch.tensor(2 * (np.log(self.sigma_max) - np.log(self.sigma_min)),
 													device=t.device))
@@ -89,7 +96,7 @@ class VESDE(SDE):
 
 
 class VPSDE(SDE):
-	def __init__(self, beta_min, beta_max)
+	def __init__(self, beta_min, beta_max):
 	"""Construct a Variance Preserving SDE.
 	Args:
 		beta_min: value of beta(0)
@@ -100,7 +107,7 @@ class VPSDE(SDE):
 	self.beta_min = beta_min
 	self.beta_max = beta_max
 
-	def diffusion_coeff(self, t)
+	def diffusion_coeff(self, t):
 		beta_t = self.beta_min + t*(self.beta_max - self.beta_min)
 		return torch.sqrt(beta_t)
 
