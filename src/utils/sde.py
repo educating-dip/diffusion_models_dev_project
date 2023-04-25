@@ -1,55 +1,90 @@
 '''
 Based on the variance exploding (VE-) SDE.
 The derivations are given in [https://arxiv.org/pdf/2011.13456.pdf] Appendix C.
+
+Based on: https://github.com/yang-song/score_sde_pytorch/blob/main/sde_lib.py
 '''
 from typing import Any, Optional
 import torch 
 import numpy as np 
 from torch import Tensor
 
-def _marginal_prob_std(t, sigma_min=0.01, sigma_max=50, device='cuda'):
-  '''Compute the mean and **standard deviation** of $p_{0t}(x(t) | x(0))$.
+import abc
 
-  Args:    
-    t: A vector of time steps.
-    sigma: The $\sigma$ in our SDE.  
-  
-  Returns:
-    The standard deviation.
-  '''    
-  return sigma_min * (sigma_max / sigma_min) ** t
 
-def _diffusion_coeff(t, sigma_min=0.01, sigma_max=50, device: Optional[Any] = None):
-  '''Compute the diffusion coefficient of our SDE.
+class SDE(abc.ABC):
+"""SDE abstract class. Functions are designed for a mini-batch of inputs."""
+	def __init__(self):
+	"""Construct an SDE.
 
-  Args:
-    t: A vector of time steps.
-    sigma: The $\sigma$ in our SDE.
-  
-  Returns:
-    The vector of diffusion coefficients.
-  '''
-  sigma = sigma_min * (sigma_max / sigma_min) ** t
-  return sigma * torch.sqrt(torch.tensor(2 * (np.log(sigma_max) - np.log(sigma_min)), device=device))
+	"""
+		super().__init__()
 
-class SDE: 
-  def __init__(self, sigma_max: float, sigma_min: float, device: Optional[Any] = None) -> None:
-    self.sigma_min = sigma_min
-    self.sigma_max = sigma_max 
-    self.device = device if device is not None else 'cuda'
+	@abc.abstractmethod
+	def sde(self, x, t):
+		"""
+		Outputs f and G
+		"""
+		pass
 
-  def diffusion_coeff(self, t) -> float: 
-    return _diffusion_coeff(
-                t=t, 
-                sigma_min=self.sigma_min, 
-                sigma_max=self.sigma_max, 
-                device=self.device
-                )
+	@abc.abstractmethod
+	def marginal_prob(self, x, t):
+		"""Parameters to determine the marginal distribution of the SDE, $p_t(x)$."""
+		pass
 
-  def marginal_prob_std(self, t) -> Tensor:
-    return _marginal_prob_std(
-                t=t, 
-                sigma_min=self.sigma_min, 
-                sigma_max=self.sigma_max, 
-                device=self.device
-                )
+	@abs.abstractmethod
+	def marginal_prob_std(self, t):
+		pass 
+
+	@abc.abstractmethod
+	def prior_sampling(self, shape):
+		"""Generate one sample from the prior distribution, $p_T(x)$."""
+		pass
+
+
+class VESDE(SDE):
+	def __init__(self, sigma_min=0.01, sigma_max=50):
+		"""Construct a Variance Exploding SDE.
+		Args:
+		sigma_min: smallest sigma.
+		sigma_max: largest sigma.
+		"""
+    	super().__init__()
+
+		self.sigma_min = sigma_min
+		self.sigma_max = sigma_max
+
+	def diffusion_coeff(self, t)
+		sigma = self.sigma_min * (self.sigma_max / self.sigma_min) ** t
+		diffusion = sigma * torch.sqrt(torch.tensor(2 * (np.log(self.sigma_max) - np.log(self.sigma_min)),
+													device=t.device))
+
+		return diffusion 
+
+	def sde(self, x, t):
+		drift = torch.zeros_like(x)
+		diffusion = self.diffusion_coeff(t)
+
+		return drift, diffusion
+
+	def marginal_prob(self, x, t):
+		"""
+		mean and standard deviation of p_{0t}(x(t) | x(0))
+	
+		"""
+		std = self.marginal_prob_std(t)
+    	mean = x
+    	return mean, std
+
+	def marginal_prob_std(self, t):
+		"""
+		standard deviation of p_{0t}(x(t) | x(0)) is used:
+			- in the UNET as a scaling of the output 
+		"""
+		std = self.sigma_min * (self.sigma_max / self.sigma_min) ** t
+		return std 
+
+	def prior_sampling(self, shape):
+		return torch.randn(*shape) * self.sigma_max
+
+
