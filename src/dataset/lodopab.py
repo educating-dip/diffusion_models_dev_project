@@ -1,3 +1,8 @@
+"""
+Adapted from Dival
+
+"""
+
 from torch.utils.data import DataLoader
 from dival import get_standard_dataset
 from torch.nn.functional import interpolate
@@ -5,13 +10,17 @@ from torch.nn.functional import interpolate
 class LoDoPabDatasetFromDival():
     def __init__(self, 
             impl: str = "astra_cuda",
-            im_size=362
+            im_size=362,
+            use_transform=True
         ):
 
         self.impl = impl
         dataset = get_standard_dataset('lodopab', impl=self.impl)
-        self.im_size = im_size
 
+        self.ray_trafo = dataset.ray_trafo
+
+        self.im_size = im_size
+        self.use_transform = use_transform
         def transform(sample):
             x = sample[1]
 
@@ -20,14 +29,14 @@ class LoDoPabDatasetFromDival():
 
         self.lodopab_train = dataset.create_torch_dataset(part='train',
                                     reshape=((1,) + dataset.space[0].shape,
-                                    (1,) + dataset.space[1].shape), transform=transform)
+                                    (1,) + dataset.space[1].shape), transform=transform if self.use_transform else None)
             
         self.lodopab_val = dataset.create_torch_dataset(part='validation',
                                     reshape=((1,) + dataset.space[0].shape,
-                                        (1,) + dataset.space[1].shape), transform=transform)
+                                        (1,) + dataset.space[1].shape), transform=transform if self.use_transform else None)
         self.lodopab_test = dataset.create_torch_dataset(part='test',
                                     reshape=((1,) + dataset.space[0].shape,
-                                        (1,) + dataset.space[1].shape), transform=transform)
+                                        (1,) + dataset.space[1].shape), transform=transform if self.use_transform else None)
 
     def get_trainloader(self,
                 batch_size: int,
