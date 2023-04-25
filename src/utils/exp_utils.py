@@ -11,7 +11,7 @@ from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
 from ..samplers import BaseSampler, Euler_Maruyama_VE_sde_predictor, Langevin_VE_sde_corrector, chain_simple_init, decomposed_diffusion_sampling_VE_sde_predictor, conj_grad_closure
 from ..third_party_models import OpenAiUNetModel
 
-def get_standard_score(config, sde, use_ema):
+def get_standard_score(config, sde, use_ema, load_model=True):
 
     if config.model.model_name == 'OpenAiUNetModel':
 	    score = OpenAiUNetModel(
@@ -35,7 +35,7 @@ def get_standard_score(config, sde, use_ema):
     else:
         raise NotImplementedError
 
-    if config.sampling.load_model_from_path is not None and config.sampling.model_name is not None: 
+    if config.sampling.load_model_from_path is not None and config.sampling.model_name is not None and load_model: 
         print(f'load score model from path: {config.sampling.load_model_from_path}')
         if use_ema:
             ema = ExponentialMovingAverage(score.parameters(), decay=0.999)

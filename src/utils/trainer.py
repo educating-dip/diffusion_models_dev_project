@@ -10,8 +10,7 @@ from .ema import ExponentialMovingAverage
 
 def score_model_simple_trainer(
 							score_model,
-							marginal_prob_std_fn,
-							diffusion_coeff_fn,
+							sde, 
 							train_dl, 
 							optim_kwargs,
 							val_kwargs,
@@ -29,7 +28,7 @@ def score_model_simple_trainer(
 		for idx, batch in tqdm(enumerate(train_dl), total = len(train_dl)):
 
 			x = batch.to(device)
-			loss = loss_fn(score_model, x, marginal_prob_std_fn)
+			loss = loss_fn(score_model, x, sde.marginal_prob_std)
 			optimizer.zero_grad()
 			loss.backward()    
 			optimizer.step()
@@ -54,8 +53,7 @@ def score_model_simple_trainer(
 			with torch.no_grad():
 				x_mean = pred_cor_uncond_sampling(
 						score_model=score_model, 
-						marginal_prob_std=marginal_prob_std_fn, 
-						diffusion_coeff=diffusion_coeff_fn, 
+						sde = sde, 
 						img_shape=x.shape[1:],
 						batch_size=val_kwargs["batch_size"], 
 						num_steps=val_kwargs["num_steps"], 
