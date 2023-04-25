@@ -48,9 +48,9 @@ def get_standard_score(config, sde, use_ema, load_model=True):
     return score
 
 def get_sde(config):
-    if config.sde.type = "vesde":
+    if config.sde.type == "vesde":
         sde = VESDE(sigma_min=config.sde.sigma_min, sigma_max=config.sde.sigma_max)
-    elif config.sde.type = "vpsde":
+    elif config.sde.type == "vpsde":
         sde = VPSDE(beta_min=config.sde.beta_min, beta_max=config.sde.beta_max)
     else:
         raise NotImplementedError

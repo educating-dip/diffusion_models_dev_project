@@ -13,37 +13,32 @@ import abc
 
 
 class SDE(abc.ABC):
-"""SDE abstract class. Functions are designed for a mini-batch of inputs."""
+	"""SDE abstract class. Functions are designed for a mini-batch of inputs."""
 	def __init__(self):
-	"""Construct an SDE.
+		"""Construct an SDE.
 
-	"""
+		"""
 		super().__init__()
 
-	@abc.abstractmethod
 	def diffusion_coeff(self, t):
 		"""
 		Outputs f
 		"""
 		pass
 
-	@abc.abstractmethod
 	def sde(self, x, t):
 		"""
 		Outputs f and G
 		"""
 		pass
 
-	@abc.abstractmethod
 	def marginal_prob(self, x, t):
 		"""Parameters to determine the marginal distribution of the SDE, $p_t(x)$."""
 		pass
 
-	@abs.abstractmethod
 	def marginal_prob_std(self, t):
 		pass 
 
-	@abc.abstractmethod
 	def prior_sampling(self, shape):
 		"""Generate one sample from the prior distribution, $p_T(x)$."""
 		pass
@@ -56,7 +51,7 @@ class VESDE(SDE):
 		sigma_min: smallest sigma.
 		sigma_max: largest sigma.
 		"""
-    	super().__init__()
+		super().__init__()
 
 		self.sigma_min = sigma_min
 		self.sigma_max = sigma_max
@@ -80,8 +75,8 @@ class VESDE(SDE):
 	
 		"""
 		std = self.marginal_prob_std(t)
-    	mean = x
-    	return mean, std
+		mean = x
+		return mean, std
 
 	def marginal_prob_std(self, t):
 		"""
@@ -96,16 +91,16 @@ class VESDE(SDE):
 
 
 class VPSDE(SDE):
-	def __init__(self, beta_min, beta_max):
-	"""Construct a Variance Preserving SDE.
-	Args:
-		beta_min: value of beta(0)
-		beta_max: value of beta(1)
+	def __init__(self, beta_min=0.1, beta_max=20):
+		"""Construct a Variance Preserving SDE.
+		Args:
+			beta_min: value of beta(0)
+			beta_max: value of beta(1)
 
-    """
-	super().__init__()
-	self.beta_min = beta_min
-	self.beta_max = beta_max
+		"""
+		super().__init__()
+		self.beta_min = beta_min
+		self.beta_max = beta_max
 
 	def diffusion_coeff(self, t):
 		beta_t = self.beta_min + t*(self.beta_max - self.beta_min)
@@ -126,7 +121,7 @@ class VPSDE(SDE):
 		std = self.marginal_prob_std(t)
 		log_mean_coeff = -0.25 * t ** 2 * (self.beta_1 - self.beta_0) - 0.5 * t * self.beta_0
 		mean = torch.exp(log_mean_coeff[:, None, None, None]) * x		
-    	return mean, std
+		return mean, std
 
 	def marginal_prob_std(self, t):
 		"""
