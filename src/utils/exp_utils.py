@@ -241,6 +241,10 @@ def get_standard_train_dataset(config):
                 device=config.device
             )
         train_dl = torch.utils.data.DataLoader(dataset, batch_size=3, shuffle=False, num_workers=16)
+    elif config.data.name.lower() == 'LoDoPabCT'.lower():
+        dataset = LoDoPabDatasetFromDival(im_size=config.data.im_size)
+        train_dl = dataset.get_trainloader(batch_size=config.training.batch_size, num_data_loader_workers=16)
+
 
     return train_dl
 
