@@ -86,9 +86,7 @@ class BaseSampler:
             
             if (i - self.sample_kwargs['start_time_step']) % logg_kwargs['num_img_in_log'] == 0:
                 writer.add_image('reco', torchvision.utils.make_grid(x_mean.squeeze(), normalize=True, scale_each=True), i)
-            
-            if i % logg_kwargs['log_freq'] == 0:
-                writer.add_scalar('PSNR', PSNR(x_mean[0, 0].cpu().numpy(), logg_kwargs['ground_truth'][0, 0].cpu().numpy()), i)
+            writer.add_scalar('PSNR', PSNR(x_mean[0, 0].cpu().numpy(), logg_kwargs['ground_truth'][0, 0].cpu().numpy()), i)
         
         writer.add_image(
             'final_reco', torchvision.utils.make_grid(x_mean.squeeze(),

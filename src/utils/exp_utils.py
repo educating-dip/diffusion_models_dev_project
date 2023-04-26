@@ -110,12 +110,15 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             ray_trafo=ray_trafo, 
             gamma=sample_kwargs['predictor']['gamma']
             )
+
+        beta = torch.tensor(1) if isinstance(sde, VESDE) else None
         predictor = functools.partial(
             decomposed_diffusion_sampling_VE_sde_predictor,
             score=score,
             sde=sde,
             rhs=ray_trafo.trafo_adjoint(observation),
             conj_grad_closure=conj_grad_closure_partial,
+            beta=beta,
             cg_kwargs={'max_iter': 5, 'max_tridiag_iter': 4}
         )
     else:
@@ -200,6 +203,12 @@ def get_standard_dataset(config, ray_trafo=None):
     elif config.data.name == 'LoDoPabCT':
         dataset = LoDoPabDatasetFromDival(im_size=config.data.im_size)
         dataset = dataset.get_testloader(batch_size=1, num_data_loader_workers=0)
+    elif config.data.name == 'Mayo': 
+        dataset = MayoDataset(
+            part=config.data.part, 
+            base_path=config.data.base_path, 
+            im_shape=ray_trafo.im_shape
+            ) 
     else:
         raise NotImplementedError
 

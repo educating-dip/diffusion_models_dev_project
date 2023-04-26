@@ -7,7 +7,7 @@ from ..utils import SDE, linear_cg
 from ..physics import BaseRayTrafo
 from ..third_party_models import OpenAiUNetModel
 
-def Euler_Maruyama_VE_sde_predictor( 
+def Euler_Maruyama_VE_sde_predictor(
     score: OpenAiUNetModel,
     sde: SDE,
     x: Tensor,
@@ -91,15 +91,16 @@ def Langevin_VE_sde_corrector(
 
 def decomposed_diffusion_sampling_VE_sde_predictor( 
     score: OpenAiUNetModel,
-    sde: SDE, 
+    sde: SDE,
     x: Tensor,
     rhs: Tensor,
     time_step: Tensor,
-    conj_grad_closure: callable, 
+    conj_grad_closure: callable,
     eta: float,
-    gamma: float, 
+    gamma: float,
     step_size: float,
     cg_kwargs: Dict,
+    beta: Optional[float] = None,
     datafitscale: Optional[float] = None # placeholder 
     ) -> Tuple[Tensor, Tensor]:
 
@@ -145,7 +146,7 @@ def decomposed_diffusion_sampling_VE_sde_predictor(
     '''
     std_t = sde.marginal_prob_std(time_step)[:, None, None, None]
     std_tminus1 = sde.marginal_prob_std(time_step - step_size)[:, None, None, None]
-    beta = 1 - std_tminus1.pow(2)/std_t.pow(2)
+    beta = 1 - std_tminus1.pow(2)/std_t.pow(2) if beta is None else beta
     noise_deterministic = - std_tminus1*std_t*torch.sqrt(1-beta.pow(2)*eta**2)*s
     noise_stochastic = std_tminus1*eta*beta*torch.randn_like(x)
     x = xhat + noise_deterministic + noise_stochastic
