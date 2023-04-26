@@ -12,8 +12,6 @@ except:
     from gpytorch.utils.linear_cg import settings, bool_compat, NumericalWarning, _default_preconditioner, _jit_linear_cg_updates, _jit_linear_cg_updates_no_precond
     LINEAR_OPERATOR_PKG_NAME = 'gpytorch'
 
-# pylint: disable=all
-
 def linear_cg(
     matmul_closure,
     rhs,

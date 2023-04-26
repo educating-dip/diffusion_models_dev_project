@@ -1,4 +1,6 @@
-# Taken from https://github.com/yang-song/score_sde_pytorch/blob/cb1f359f4aadf0ff9a5e122fe8fffc9451fd6e44/models/ema.py#L10
+"""
+From https://github.com/yang-song/score_sde_pytorch/blob/cb1f359f4aadf0ff9a5e122fe8fffc9451fd6e44/models/ema.py#L10
+"""
 import torch
 
 class ExponentialMovingAverage:

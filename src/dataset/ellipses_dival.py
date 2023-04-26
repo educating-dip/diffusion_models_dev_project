@@ -3,7 +3,7 @@ from dival import get_standard_dataset
 
 class EllipseDatasetFromDival():
     def __init__(self, 
-        impl: str = "astra_cuda"
+        impl: str = 'astra_cuda'
         ) -> None:
 
         self.impl = impl

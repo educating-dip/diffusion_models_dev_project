@@ -1,14 +1,10 @@
 """
-Implementation of a LPD net as a conditional score model
-
-
+Implementation of a Learned Primal Dual as a conditional score model
 Adapted from DiVaL: https://jleuschn.github.io/docs.dival/_modules/dival/reconstructors/networks/iterative.html#IterativeBlock
 """
 
-
 import torch
 import torch.nn as nn
-
 
 class IterativeBlock(nn.Module):
     def __init__(self, n_in=3, n_out=1, n_memory=5, n_layer=3, internal_ch=32,
@@ -36,8 +32,6 @@ class IterativeBlock(nn.Module):
     def forward(self, x):
         upd = self.block(x)
         return upd
-
-
 
 class PrimalDualNet(nn.Module):
     def __init__(self, n_iter, op, op_adj, sde, n_primal=5, n_dual=5,
@@ -86,9 +80,6 @@ class PrimalDualNet(nn.Module):
 
     def forward(self, x, y, t):
         h = self.lpd_forward(x, y)
-
         h_mean, std = self.sde.marginal_prob(h, t)
-
         out = (h_mean - x)/std[:, None, None, None]**2
-
         return out 

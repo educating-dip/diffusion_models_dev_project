@@ -1,31 +1,24 @@
 """
 Train a LearnedPrimalDualNetwork as a conditional score model.
 """
-
-
 import os
 import yaml
 import torch
 import functools
 
 from odl.contrib.torch import OperatorModule
-
-
 from datetime import datetime
-from src import (get_sde, PrimalDualNet, cond_score_model_trainer,
-				get_standard_score, LoDoPabDatasetFromDival)
-
+from src import (get_standard_sde, PrimalDualNet, cond_score_model_trainer,
+	get_standard_score, LoDoPabDatasetFromDival)
 
 def coordinator():
 	from configs.lodopab_dival_configs import get_config
 
 	config = get_config()
-	sde = get_sde(config=config)
+	sde = get_standard_sde(config=config)
 
 	dataset = LoDoPabDatasetFromDival(im_size=config.data.im_size , use_transform=False)
-
 	train_dl = dataset.get_trainloader(batch_size=6)
-
 	score = PrimalDualNet(n_iter=config.model.n_iter, 
 						op=OperatorModule(dataset.ray_trafo), 
 						op_adj=OperatorModule(dataset.ray_trafo.adjoint), 

@@ -5,12 +5,15 @@ import functools
 from math import ceil
 from pathlib import Path
 
-from .ema import ExponentialMovingAverage
-from ..dataset import LoDoPabDatasetFromDival, MayoDataset, get_disk_dist_ellipses_dataset, get_walnut_data
-from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
-from ..samplers import BaseSampler, Euler_Maruyama_VE_sde_predictor, Langevin_VE_sde_corrector, chain_simple_init, decomposed_diffusion_sampling_VE_sde_predictor, conj_grad_closure
-from ..third_party_models import OpenAiUNetModel
 from .sde import VESDE, VPSDE
+from .ema import ExponentialMovingAverage
+
+from ..third_party_models import OpenAiUNetModel
+from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDataset, 
+    get_disk_dist_ellipses_dataset, get_walnut_data)
+from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
+from ..samplers import (BaseSampler, Euler_Maruyama_VE_sde_predictor, Langevin_VE_sde_corrector, 
+    chain_simple_init, decomposed_diffusion_sampling_VE_sde_predictor, conj_grad_closure)
 
 def get_standard_score(config, sde, use_ema, load_model=True):
 
@@ -47,11 +50,18 @@ def get_standard_score(config, sde, use_ema, load_model=True):
 
     return score
 
-def get_sde(config):
-    if config.sde.type == "vesde":
-        sde = VESDE(sigma_min=config.sde.sigma_min, sigma_max=config.sde.sigma_max)
-    elif config.sde.type == "vpsde":
-        sde = VPSDE(beta_min=config.sde.beta_min, beta_max=config.sde.beta_max)
+def get_standard_sde(config):
+
+    if config.sde.type == 'vesde':
+        sde = VESDE(
+            sigma_min=config.sde.sigma_min, 
+            sigma_max=config.sde.sigma_max
+            )
+    elif config.sde.type == 'vpsde':
+        sde = VPSDE(
+            beta_min=config.sde.beta_min, 
+            beta_max=config.sde.beta_max
+            )
     else:
         raise NotImplementedError
 
@@ -92,12 +102,13 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             'start_time_step': ceil(float(args.pct_chain_elapsed) * int(args.num_steps)),
             'im_shape': ray_trafo.im_shape,
             'eps': config.sampling.eps,
-            'predictor': {'eta': 0.15},
+            'predictor': {'eta': float(args.eta), 'gamma': float(args.gamma)},
             'corrector': {}
             }
         conj_grad_closure_partial = functools.partial(
             conj_grad_closure,
-            ray_trafo=ray_trafo
+            ray_trafo=ray_trafo, 
+            gamma=sample_kwargs['predictor']['gamma']
             )
         predictor = functools.partial(
             decomposed_diffusion_sampling_VE_sde_predictor,
@@ -130,11 +141,11 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
         )
 
     sampler = BaseSampler(
-        score=score,
+        score=score, 
         sde=sde,
-        predictor=predictor,
-        init_chain_fn=init_chain_fn,
+        predictor=predictor,         
         corrector=corrector,
+        init_chain_fn=init_chain_fn,
         sample_kwargs=sample_kwargs, 
         device=config.device
         )
@@ -194,6 +205,36 @@ def get_standard_dataset(config, ray_trafo=None):
 
     return dataset
 
+def get_standard_train_dataset(config): 
+
+    if config.data.name == 'EllipseDatasetFromDival':
+        ellipse_dataset = EllipseDatasetFromDival(impl='astra_cuda')
+        train_dl = ellipse_dataset.get_trainloader(
+            batch_size=config.training.batch_size, 
+            num_data_loader_workers=0
+        )
+    elif config.data.name == 'DiskDistributedEllipsesDataset':
+        if config.data.num_n_ellipse > 1:
+            dataset = get_disk_dist_ellipses_dataset(
+                fold='train',
+                im_size=config.data.im_size, 
+                length=config.data.length,
+                diameter=config.data.diameter,
+                max_n_ellipse=config.data.num_n_ellipse,
+                device=config.device
+            )
+        else:
+            dataset = get_one_ellipses_dataset(
+                fold='train',
+                im_size=config.data.im_size,
+                length=config.data.length,
+                diameter=config.data.diameter,
+                device=config.device
+            )
+        train_dl = torch.utils.data.DataLoader(dataset, batch_size=3, shuffle=False)
+
+    return train_dl
+
 def get_standard_configs(args):
 
     if args.model_learned_on == 'ellipses': # score-model pre-trainined on dataset configs 
@@ -210,6 +251,8 @@ def get_standard_configs(args):
         from configs.lodopab_configs import get_config
     elif args.dataset == 'walnut':
         from configs.walnut_configs import get_config
+    elif args.dataset == 'mayo': 
+        from configs.mayo_configs import get_config
     else:
         raise NotImplementedError
     dataconfig = get_config()
@@ -220,6 +263,5 @@ def get_standard_path(args):
 
     path = './score_model/outputs/'
     path += args.model_learned_on + '_' + args.dataset
-
     return Path(os.path.join(path, f'{time.strftime("%d-%m-%Y-%H-%M-%S")}'))
 	

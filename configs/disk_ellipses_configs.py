@@ -1,5 +1,4 @@
 import ml_collections
-
 from .default_config import get_default_configs
 
 
@@ -25,8 +24,7 @@ def get_config():
 
   # model
   config.model.attention_resolutions = [16, 32]
-  config.sampling.load_model_from_path = '/localdata/AlexanderDenker/score_based_baseline/DiskDistributedEllipsesDataset/checkpoints/2023_04_14_08:04' #2023_02_22_10:02"
+  config.sampling.load_model_from_path = '/localdata/AlexanderDenker/score_based_baseline/DiskDistributedEllipsesDataset/checkpoints/2023_04_14_08:04'
   config.sampling.model_name = 'model.pt'
-
 
   return config

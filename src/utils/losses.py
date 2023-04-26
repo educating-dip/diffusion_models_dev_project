@@ -2,12 +2,12 @@ import torch
 
 def loss_fn(model, x, sde, eps=1e-5):
 
-    """The loss function for training score-based generative models.
-
+    """
+    The loss function for training score-based generative models.
     Args:
         model: A PyTorch model instance that represents a 
         time-dependent score-based model.
-        x: A mini-batch of training data.    
+        x: A mini-batch of training data.
         sde: the forward sde
         eps: A tolerance value for numerical stability.
     """
@@ -23,12 +23,12 @@ def loss_fn(model, x, sde, eps=1e-5):
 
 def cond_loss_fn(model, x, y, sde, eps=1e-5):
 
-    """The loss function for training score-based generative models.
-
+    """
+    The loss function for training score-based generative models.
     Args:
         model: A PyTorch model instance that represents a 
         time-dependent score-based model.
-        x: A mini-batch of training data.    
+        x: A mini-batch of training data.
         sde: the forward sde
         eps: A tolerance value for numerical stability.
     """

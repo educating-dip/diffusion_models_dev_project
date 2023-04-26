@@ -96,10 +96,11 @@ def decomposed_diffusion_sampling_VE_sde_predictor(
     rhs: Tensor,
     time_step: Tensor,
     conj_grad_closure: callable, 
-    eta: float, 
+    eta: float,
+    gamma: float, 
     step_size: float,
     cg_kwargs: Dict,
-    datafitscale: Optional[float] = None
+    datafitscale: Optional[float] = None # placeholder 
     ) -> Tuple[Tensor, Tensor]:
 
     '''
@@ -123,11 +124,12 @@ def decomposed_diffusion_sampling_VE_sde_predictor(
     xhat0 = x + s*std.pow(2) # Tweedy denoising step
 
     rhs_flat = rhs.reshape(np.prod(xhat0.shape[2:]), xhat0.shape[0])
-    xhat0_flat = xhat0.reshape(np.prod(xhat0.shape[2:]), xhat0.shape[0])
+    initial_guess = xhat0.reshape(np.prod(xhat0.shape[2:]), xhat0.shape[0])
+    reg_rhs_flat = rhs_flat*gamma + initial_guess
     xhat, _= linear_cg( # data consistency step
         matmul_closure=conj_grad_closure,
-        rhs=rhs_flat*1e-5 + xhat0_flat,
-        initial_guess=xhat0.reshape(np.prod(xhat0.shape[2:]), xhat0.shape[0]),
+        rhs=reg_rhs_flat,
+        initial_guess=initial_guess,
         **cg_kwargs # early-stop CG (i.e., )
         )
     xhat = xhat.T.view(xhat0.shape[0], 1, *xhat0.shape[2:])
@@ -150,10 +152,10 @@ def decomposed_diffusion_sampling_VE_sde_predictor(
 
     return x.detach(), xhat
 
-def conj_grad_closure(x: Tensor, ray_trafo: BaseRayTrafo, eps: float = 1e-5):
+def conj_grad_closure(x: Tensor, ray_trafo: BaseRayTrafo, gamma: float = 1e-5):
     batch_size = x.shape[-1]
     x = x.T.reshape(batch_size, 1, *ray_trafo.im_shape)
-    return (eps*ray_trafo.trafo_adjoint(ray_trafo(x)) + x).view(batch_size, np.prod(ray_trafo.im_shape)).T
+    return (gamma*ray_trafo.trafo_adjoint(ray_trafo(x)) + x).view(batch_size, np.prod(ray_trafo.im_shape)).T
 
 def chain_simple_init(
     time_steps: Tensor,

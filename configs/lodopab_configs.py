@@ -22,8 +22,7 @@ def get_config():
 
   # model
   config.model.attention_resolutions = [16, 32]
-  config.sampling.load_model_from_path = '/localdata/AlexanderDenker/score_based_baseline/LoDoPabCT/checkpoints/2023_04_12_10:04' #2023_02_22_10:02"
+  config.sampling.load_model_from_path = '/localdata/AlexanderDenker/score_based_baseline/LoDoPabCT/checkpoints/2023_04_12_10:04'
   config.sampling.model_name = 'model.pt'
-
 
   return config

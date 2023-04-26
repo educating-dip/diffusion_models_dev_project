@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import islice
 from itertools import islice
-from src import (get_sde, PSNR, SSIM, get_standard_dataset, get_data_from_ground_truth, get_standard_ray_trafo,  
+from src import (get_standard_sde, PSNR, SSIM, get_standard_dataset, get_data_from_ground_truth, get_standard_ray_trafo,  
 	get_standard_score, get_standard_sampler, get_standard_configs, get_standard_path) 
 
 parser = argparse.ArgumentParser(description='conditional sampling')
@@ -16,7 +16,9 @@ parser.add_argument('--method',  default='naive', choices=['naive', 'dps', 'dds'
 parser.add_argument('--add_corrector_step', action='store_true')
 parser.add_argument('--ema', action='store_true')
 parser.add_argument('--num_steps', default=1000)
-parser.add_argument('--penalty', default=1, help='penalty parameter')
+parser.add_argument('--penalty', default=1, help='reg. penalty used for ``naive'' and ``dps'' only.')
+parser.add_argument('--gamma', default=0.01, help='reg. used for ``dds''.')
+parser.add_argument('--eta', default=0.15, help='reg. used for ``dds'' weighting stochastic and deterministic noise.')
 parser.add_argument('--pct_chain_elapsed', default=0,  help='``pct_chain_elapsed'' actives init of chain')
 
 def coordinator(args):
@@ -29,10 +31,10 @@ def coordinator(args):
 		torch.manual_seed(config.seed) # for reproducible noise in simulate
 	''' 
 	This sets the Forward SDE. Either Variance Exploding SDE or Variance Preserving SDE refer to Appendix C 
-		in ``SCORE-BASED GENERATIVE MODELING THROUGH STOCHASTIC DIFFERENTIAL EQUATIONS'' 
+		in ``SCORE-BASED GENERATIVE MODELING THROUGH STOCHASTIC DIFFERENTIAL EQUATIONS''
 		at https://arxiv.org/pdf/2011.13456.pdf. 
 	'''
-	sde = get_sde(config=config)
+	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=args.ema)
 	score = score.to(config.device)
 	score.eval()
@@ -42,7 +44,6 @@ def coordinator(args):
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
 
 	for i, data_sample in enumerate(islice(dataset, config.data.validation.num_images)):
-		
 		if len(data_sample) == 3:
 			observation, ground_truth, filtbackproj = data_sample
 			ground_truth = ground_truth.to(device=config.device)
@@ -57,7 +58,6 @@ def coordinator(args):
 
 		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 10, 'log_freq':10, 
 			'sample_num':i, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
-		
 		sampler = get_standard_sampler(
 			args=args,
 			config=config,
@@ -66,7 +66,8 @@ def coordinator(args):
 			ray_trafo=ray_trafo,
 			filtbackproj=filtbackproj,
 			observation=observation,
-			device=config.device)
+			device=config.device
+			)
 		
 		recon = sampler.sample(logg_kwargs=logg_kwargs)
 		torch.save(		{'recon': recon.cpu().squeeze(), 'ground_truth': ground_truth.cpu().squeeze()}, 
@@ -85,6 +86,5 @@ def coordinator(args):
 		yaml.dump(report, file)
 
 if __name__ == '__main__':
-	
 	args = parser.parse_args()
 	coordinator(args)

@@ -13,7 +13,6 @@ from .walnut_utils import (
 
 DEFAULT_WALNUT_SCALING_FACTOR = 14.
 
-
 def get_walnut_2d_observation(
         data_path: str,
         walnut_id: int = 1, orbit_id: int = 2,

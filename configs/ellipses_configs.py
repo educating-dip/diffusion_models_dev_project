@@ -21,7 +21,6 @@ def get_config():
 
   config.sampling.load_model_from_path = None
   config.sampling.model_name = None
-
   config.model.model_name = 'OpenAiUNetModel'
 
   return config

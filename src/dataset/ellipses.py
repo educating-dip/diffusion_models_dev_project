@@ -90,13 +90,13 @@ class EllipsesDataset(torch.utils.data.IterableDataset):
         self._extend_ellipses_data(idx + 1)
         return self._generate_item(idx)
 
-
 def get_ellipses_dataset(
         fold : str = 'train', 
         im_size : int = 128, 
         length : int = 3200,
         max_n_ellipse : int = 70, 
-        device = None) -> EllipsesDataset:
+        device = None
+        ) -> EllipsesDataset:
 
     image_dataset = EllipsesDataset(
             (im_size, im_size), 
@@ -144,7 +144,8 @@ def get_disk_dist_ellipses_dataset(
         length : int = 3200,
         diameter : float =  0.4745,
         max_n_ellipse : int = 70,
-        device = None) -> DiskDistributedEllipsesDataset:
+        device = None
+        ) -> DiskDistributedEllipsesDataset:
 
     image_dataset = DiskDistributedEllipsesDataset(
             (im_size, im_size), 
@@ -197,7 +198,8 @@ def get_one_ellipses_dataset(
         im_size : int = 128, 
         length : int = 3200,
         diameter : float =  0.4745,
-        device = None) -> OneEllipsesDataset:
+        device = None
+        ) -> OneEllipsesDataset:
 
     image_dataset = OneEllipsesDataset(
             (im_size, im_size), 

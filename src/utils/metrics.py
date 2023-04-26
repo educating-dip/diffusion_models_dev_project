@@ -1,5 +1,4 @@
 import numpy as np
-
 from skimage.metrics import structural_similarity
 
 def PSNR(reconstruction, ground_truth, data_range=None):

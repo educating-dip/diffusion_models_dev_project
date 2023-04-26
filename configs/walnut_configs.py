@@ -1,7 +1,6 @@
 import ml_collections
 from .default_config import get_default_configs
 
-
 def get_config():
   config = get_default_configs()
 
@@ -20,7 +19,6 @@ def get_config():
   data.scaling_factor = 14.  # scale values to approximately [0., 1.]
   data.validation = validation = ml_collections.ConfigDict()
   data.validation.num_images = 1 
-
   data.stddev = 0.05
 
   # forward operator
