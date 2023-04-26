@@ -10,7 +10,7 @@ from torch.optim import Adam
 from .losses import loss_fn
 from .ema import ExponentialMovingAverage
 
-from ..samplers import (BaseSampler, Euler_Maruyama_VE_sde_predictor, Langevin_VE_sde_corrector)
+from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector)
 
 
 def score_model_simple_trainer(
@@ -59,8 +59,8 @@ def score_model_simple_trainer(
 			sampler = BaseSampler(
 						score=score, 
 						sde=sde,
-						predictor=functools.partial(Euler_Maruyama_VE_sde_predictor, nloglik = None),         
-						corrector=functools.partial(Langevin_VE_sde_corrector, nloglik = None),
+						predictor=functools.partial(Euler_Maruyama_sde_predictor, nloglik = None),         
+						corrector=functools.partial(Langevin_sde_corrector, nloglik = None),
 						init_chain_fn=None,
 						sample_kwargs = {
 								'num_steps': val_kwargs['num_steps'],

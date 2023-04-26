@@ -41,6 +41,12 @@ class SDE(abc.ABC):
 	def marginal_prob_std(self, t):
 		pass 
 
+	def marginal_prob_mean(self, t):
+		"""
+		Outputs the scaling factor of mean of p_{0t}(x(t)|x(0)) (for VE-SDE and VP-SDE the mean is a scaled x(0))
+		"""
+		pass 
+
 	def prior_sampling(self, shape):
 		"""
 		Generate one sample from the prior distribution, $p_T(x)$.
@@ -90,6 +96,11 @@ class VESDE(SDE):
 		std = self.sigma_min * (self.sigma_max / self.sigma_min) ** t
 		return std 
 
+	def marginal_prob_mean(self, t):
+		mean = torch.ones_like(t)
+
+		return mean
+
 	def prior_sampling(self, shape):
 		return torch.randn(*shape) * self.sigma_max
 
@@ -137,5 +148,11 @@ class VPSDE(SDE):
 		std = torch.sqrt(1. - torch.exp(2. * log_mean_coeff))
 		return std 
 
+	def marginal_prob_mean(self, t):
+		log_mean_coeff = -0.25 * t ** 2 * (self.beta_max - self.beta_min) - 0.5 * t * self.beta_min
+		mean = torch.exp(log_mean_coeff[:, None, None, None])
+
+		return mean 
+		
 	def prior_sampling(self, shape):
 		return torch.randn(*shape) 

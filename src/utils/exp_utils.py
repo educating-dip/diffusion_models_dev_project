@@ -12,7 +12,7 @@ from ..third_party_models import OpenAiUNetModel
 from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDataset, 
     get_disk_dist_ellipses_dataset, get_walnut_data)
 from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
-from ..samplers import (BaseSampler, Euler_Maruyama_VE_sde_predictor, Langevin_VE_sde_corrector, 
+from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, 
     chain_simple_init, decomposed_diffusion_sampling_VE_sde_predictor, conj_grad_closure)
 
 def get_standard_score(config, sde, use_ema, load_model=True):
@@ -71,7 +71,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
 
     if args.method.lower() == 'naive':
         predictor = functools.partial(
-            Euler_Maruyama_VE_sde_predictor,
+            Euler_Maruyama_sde_predictor,
             nloglik = lambda x: torch.linalg.norm(observation - ray_trafo(x)))
         sample_kwargs = {
             'num_steps': int(args.num_steps),
@@ -84,7 +84,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             }
     elif args.method.lower() == 'dps':
         predictor = functools.partial(
-            Euler_Maruyama_VE_sde_predictor,
+            Euler_Maruyama_sde_predictor,
             nloglik = lambda x: torch.linalg.norm(observation - ray_trafo(x)))
         sample_kwargs = {
             'num_steps': int(args.num_steps),
@@ -126,7 +126,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
 
     corrector = None
     if args.add_corrector_step:
-        corrector = functools.partial(  Langevin_VE_sde_corrector,
+        corrector = functools.partial(  Langevin_sde_corrector,
             nloglik = lambda x: torch.linalg.norm(observation - ray_trafo(x))   )
         sample_kwargs['corrector']['corrector_steps'] = 5
         sample_kwargs['corrector']['penalty'] = float(args.penalty)

@@ -4,5 +4,5 @@ from .utils import (VESDE, VPSDE, SDE, loss_fn, PSNR, SSIM, ExponentialMovingAve
     score_model_simple_trainer, get_standard_dataset, get_data_from_ground_truth, get_standard_score,
     get_standard_ray_trafo, get_standard_sampler, get_standard_path, get_standard_configs, get_standard_sde, get_standard_train_dataset)
 from .third_party_models import OpenAiUNetModel
-from .samplers import BaseSampler, Euler_Maruyama_VE_sde_predictor, Langevin_VE_sde_corrector
+from .samplers import BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector
 from .physics import SimpleTrafo, SimulatedDataset, simulate, get_walnut_2d_ray_trafo

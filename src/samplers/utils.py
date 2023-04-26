@@ -7,7 +7,7 @@ from ..utils import SDE, linear_cg
 from ..physics import BaseRayTrafo
 from ..third_party_models import OpenAiUNetModel
 
-def Euler_Maruyama_VE_sde_predictor(
+def Euler_Maruyama_sde_predictor(
     score: OpenAiUNetModel,
     sde: SDE,
     x: Tensor,
@@ -19,7 +19,7 @@ def Euler_Maruyama_VE_sde_predictor(
     aTweedy: bool = False
     ) -> Tuple[Tensor, Tensor]:
     '''
-    Implements the predictor step using Euler-Maruyama for the VE-SDE model
+    Implements the predictor step using Euler-Maruyama 
     (i.e., see Eq.30) in 
             1. @article{song2020score,
                 title={Score-based generative modeling through stochastic differential equations},
@@ -43,24 +43,26 @@ def Euler_Maruyama_VE_sde_predictor(
     x.requires_grad_()
     s = score(x, time_step).detach() if not aTweedy else score(x, time_step)
     if nloglik is not None:
-        if aTweedy: xhat0 = x + s*sde.marginal_prob_std(time_step)[:, None, None, None].pow(2)
+        if aTweedy: xhat0 = (x + s*sde.marginal_prob_std(time_step)[:, None, None, None].pow(2))/sde.marginal_prob_mean(time_step)[:, None, None, None]
         loss = nloglik(x if not aTweedy else xhat0)
         nloglik_grad = torch.autograd.grad(outputs=loss, inputs=x)[0]
     
-    diffusion = sde.diffusion_coeff(time_step)[:, None, None, None]
-    eta = diffusion.pow(2)*step_size
-    update = s*eta
-    x_mean = x + update
+    drift, diffusion = sde.sde(time_step)
+
+    score_update = s
     if nloglik is not None: datafit = nloglik_grad * eta
     # if ``penalty == 1/σ2'' and ``aTweedy'' is False : recovers Eq.4 in 1.
     if aTweedy and nloglik is not None: datafitscale = loss.pow(-1)
-    if nloglik is not None: x_mean = x_mean - penalty*datafit*datafitscale # minus for negative log-lik. 
-    noise = eta.pow(.5)*torch.randn_like(x)
+    if nloglik is not None: score_update = score_update - penalty*datafit*datafitscale # minus for negative log-lik. 
+
+    x_mean = x_mean - (drift - diffusion[:, None, None, None].pow(2)*score_update)*step_size
+    
+    noise = diffusion[:, None, None, None]*torch.sqrt(step_size)*torch.randn_like(x)
     x = x_mean + noise
 
     return x.detach(), x_mean.detach()
 
-def Langevin_VE_sde_corrector(
+def Langevin_sde_corrector(
     score: OpenAiUNetModel,
     sde: SDE,
     x: Tensor,
@@ -73,7 +75,7 @@ def Langevin_VE_sde_corrector(
     ) -> Tensor:
 
     ''' 
-    Implements the corrector step using Langevin MCMC for VE-SDE models.     
+    Implements the corrector step using Langevin MCMC   
     '''
     if nloglik is not None: assert (datafitscale is not None) and (penalty is not None)
     for _ in range(corrector_steps):
