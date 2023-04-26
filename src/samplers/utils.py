@@ -47,7 +47,7 @@ def Euler_Maruyama_sde_predictor(
         loss = nloglik(x if not aTweedy else xhat0)
         nloglik_grad = torch.autograd.grad(outputs=loss, inputs=x)[0]
     
-    drift, diffusion = sde.sde(time_step)
+    drift, diffusion = sde.sde(x, time_step)
 
     score_update = s
     if nloglik is not None: datafit = nloglik_grad * eta
@@ -55,9 +55,9 @@ def Euler_Maruyama_sde_predictor(
     if aTweedy and nloglik is not None: datafitscale = loss.pow(-1)
     if nloglik is not None: score_update = score_update - penalty*datafit*datafitscale # minus for negative log-lik. 
 
-    x_mean = x_mean - (drift - diffusion[:, None, None, None].pow(2)*score_update)*step_size
+    x_mean = x - (drift - diffusion[:, None, None, None].pow(2)*score_update)*step_size
     
-    noise = diffusion[:, None, None, None]*torch.sqrt(step_size)*torch.randn_like(x)
+    noise = torch.sqrt(diffusion[:, None, None, None].pow(2)*step_size)*torch.randn_like(x)
     x = x_mean + noise
 
     return x.detach(), x_mean.detach()
