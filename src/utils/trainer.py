@@ -2,12 +2,16 @@ import os
 import torch 
 import torchvision
 import numpy as np 
+import functools 
 
 from tqdm import tqdm 
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim import Adam
 from .losses import loss_fn
 from .ema import ExponentialMovingAverage
+
+from ..samplers import (BaseSampler, Euler_Maruyama_VE_sde_predictor, Langevin_VE_sde_corrector)
+
 
 def score_model_simple_trainer(
 	score,
@@ -18,6 +22,8 @@ def score_model_simple_trainer(
 	device, 
 	log_dir='./'
 	) -> None:
+
+
 
 	writer = SummaryWriter(log_dir=log_dir, comment='training-score-model')
 	optimizer = Adam(score.parameters(), lr=optim_kwargs['lr'])
@@ -42,7 +48,6 @@ def score_model_simple_trainer(
 			if idx > optim_kwargs['ema_warm_start_steps'] or epoch > 0:
 				ema.update(score.parameters())
 
-
 		print('Average Loss: {:5f}'.format(avg_loss / num_items))
 		writer.add_scalar('train/mean_loss_per_epoch', avg_loss / num_items, epoch + 1)
 		torch.save(score.state_dict(), os.path.join(log_dir,'model.pt'))
@@ -50,16 +55,25 @@ def score_model_simple_trainer(
 
 		if  epoch % val_kwargs['sample_freq']== 0:
 			score.eval()
-			with torch.no_grad():
-				x_mean = pred_cor_uncond_sampling(
-					score=score, 
-					sde = sde, 
-					img_shape=x.shape[1:],
-					batch_size=val_kwargs['batch_size'], 
-					num_steps=val_kwargs['num_steps'], 
-					snr=val_kwargs['snr'], 
-					device=device, 
-					eps=val_kwargs['eps']
-					)
-				sample_grid = torchvision.utils.make_grid(x_mean, normalize=True, scale_each=True)
-				writer.add_image('unconditional samples', sample_grid, global_step=epoch)
+
+			sampler = BaseSampler(
+						score=score, 
+						sde=sde,
+						predictor=functools.partial(Euler_Maruyama_VE_sde_predictor, nloglik = None),         
+						corrector=functools.partial(Langevin_VE_sde_corrector, nloglik = None),
+						init_chain_fn=None,
+						sample_kwargs = {
+								'num_steps': val_kwargs['num_steps'],
+								'start_time_step': 0,
+								'batch_size': val_kwargs['batch_size'],
+								'im_shape': x.shape[1:],
+								'eps': val_kwargs['eps'],
+								'predictor': {'aTweedy': False},
+								'corrector': {'corrector_steps': 1}
+           					 }, 
+						device=device)
+						
+			x_mean = sampler.sample(logging=False)
+
+			sample_grid = torchvision.utils.make_grid(x_mean, normalize=True, scale_each=True)
+			writer.add_image('unconditional samples', sample_grid, global_step=epoch)

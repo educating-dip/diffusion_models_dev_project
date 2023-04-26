@@ -4,14 +4,13 @@ import torch
 import functools
 
 from datetime import datetime
-from src import (get_standard_sde, marginal_prob_std, diffusion_coeff, OpenAiUNetModel, EllipseDatasetFromDival, 
-	get_disk_dist_ellipses_dataset, score_model_simple_trainer, get_one_ellipses_dataset, get_standard_score, get_standard_configs)
+from src import (get_standard_sde, score_model_simple_trainer, get_standard_score, get_standard_configs, get_standard_train_dataset)
 
 from configs.disk_ellipses_configs import get_config
 
-def coordinator(args):
+def coordinator():
 
-	config, _ = get_config(args)
+	config = get_config()
 	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=False, load_model=False)
 	log_dir = './score_based_baseline/checkpoints/' + datetime.now().strftime('%Y_%m_%d_%H:%m')

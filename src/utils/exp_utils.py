@@ -240,7 +240,7 @@ def get_standard_train_dataset(config):
                 diameter=config.data.diameter,
                 device=config.device
             )
-        train_dl = torch.utils.data.DataLoader(dataset, batch_size=3, shuffle=False)
+        train_dl = torch.utils.data.DataLoader(dataset, batch_size=3, shuffle=False, num_workers=16)
 
     return train_dl
 

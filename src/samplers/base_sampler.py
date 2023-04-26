@@ -38,10 +38,12 @@ class BaseSampler:
     
     def sample(self,
         logg_kwargs: Dict = {},
+        logging: bool = True 
         ) -> Tensor:
-
-        writer = SummaryWriter(log_dir=os.path.join(logg_kwargs['log_dir'], str(logg_kwargs['sample_num'])))
-        log_interval = (self.sample_kwargs['num_steps'] - self.sample_kwargs['start_time_step']) / logg_kwargs['num_img_in_log']
+        if logging:
+            writer = SummaryWriter(log_dir=os.path.join(logg_kwargs['log_dir'], str(logg_kwargs['sample_num'])))
+            log_interval = (self.sample_kwargs['num_steps'] - self.sample_kwargs['start_time_step']) / logg_kwargs['num_img_in_log']
+        
         time_steps = np.linspace(1., self.sample_kwargs['eps'], self.sample_kwargs['num_steps'])
         step_size = time_steps[0] - time_steps[1]
         if self.sample_kwargs['start_time_step'] == 0:
@@ -51,14 +53,15 @@ class BaseSampler:
         else:
             init_x = self.init_chain_fn(time_steps=time_steps)
         
-        writer.add_image('init_x', torchvision.utils.make_grid(init_x, 
-            normalize=True, scale_each=True), global_step=0)
-        if logg_kwargs['ground_truth'] is not None: writer.add_image(
-            'ground_truth', torchvision.utils.make_grid(logg_kwargs['ground_truth'].squeeze(), 
+        if logging:
+            writer.add_image('init_x', torchvision.utils.make_grid(init_x, 
                 normalize=True, scale_each=True), global_step=0)
-        if logg_kwargs['filtbackproj'] is not None: writer.add_image(
-            'filtbackproj', torchvision.utils.make_grid(logg_kwargs['filtbackproj'].squeeze(), 
-                normalize=True, scale_each=True), global_step=0)
+            if logg_kwargs['ground_truth'] is not None: writer.add_image(
+                'ground_truth', torchvision.utils.make_grid(logg_kwargs['ground_truth'].squeeze(), 
+                    normalize=True, scale_each=True), global_step=0)
+            if logg_kwargs['filtbackproj'] is not None: writer.add_image(
+                'filtbackproj', torchvision.utils.make_grid(logg_kwargs['filtbackproj'].squeeze(), 
+                    normalize=True, scale_each=True), global_step=0)
         
         x = init_x
         for i in tqdm(range(self.sample_kwargs['start_time_step'], self.sample_kwargs['num_steps'])):     
@@ -84,12 +87,14 @@ class BaseSampler:
                 **self.sample_kwargs['predictor']
                 )
             
-            if (i - self.sample_kwargs['start_time_step']) % logg_kwargs['num_img_in_log'] == 0:
-                writer.add_image('reco', torchvision.utils.make_grid(x_mean.squeeze(), normalize=True, scale_each=True), i)
-            writer.add_scalar('PSNR', PSNR(x_mean[0, 0].cpu().numpy(), logg_kwargs['ground_truth'][0, 0].cpu().numpy()), i)
+            if logging:
+                if (i - self.sample_kwargs['start_time_step']) % logg_kwargs['num_img_in_log'] == 0:
+                    writer.add_image('reco', torchvision.utils.make_grid(x_mean.squeeze(), normalize=True, scale_each=True), i)
+                writer.add_scalar('PSNR', PSNR(x_mean[0, 0].cpu().numpy(), logg_kwargs['ground_truth'][0, 0].cpu().numpy()), i)
         
-        writer.add_image(
-            'final_reco', torchvision.utils.make_grid(x_mean.squeeze(),
-            normalize=True, scale_each=True), global_step=0)
+        if logging:
+            writer.add_image(
+                'final_reco', torchvision.utils.make_grid(x_mean.squeeze(),
+                normalize=True, scale_each=True), global_step=0)
         
         return x_mean 
