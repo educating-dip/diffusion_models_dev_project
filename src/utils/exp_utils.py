@@ -17,7 +17,7 @@ from ..samplers import (BaseSampler, Euler_Maruyama_VE_sde_predictor, Langevin_V
 
 def get_standard_score(config, sde, use_ema, load_model=True):
 
-    if config.model.model_name == 'OpenAiUNetModel':
+    if config.model.model_name.lower() == 'OpenAiUNetModel'.lower():
 	    score = OpenAiUNetModel(
             image_size=config.data.im_size,
             in_channels=config.model.in_channels,
@@ -52,12 +52,12 @@ def get_standard_score(config, sde, use_ema, load_model=True):
 
 def get_standard_sde(config):
 
-    if config.sde.type == 'vesde':
+    if config.sde.type.lower() == 'vesde':
         sde = VESDE(
             sigma_min=config.sde.sigma_min, 
             sigma_max=config.sde.sigma_max
             )
-    elif config.sde.type == 'vpsde':
+    elif config.sde.type.lower() == 'vpsde':
         sde = VPSDE(
             beta_min=config.sde.beta_min, 
             beta_max=config.sde.beta_max
@@ -69,7 +69,7 @@ def get_standard_sde(config):
 
 def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, filtbackproj=None, device=None):
 
-    if args.method == 'naive':
+    if args.method.lower() == 'naive':
         predictor = functools.partial(
             Euler_Maruyama_VE_sde_predictor,
             nloglik = lambda x: torch.linalg.norm(observation - ray_trafo(x)))
@@ -82,7 +82,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             'predictor': {'aTweedy': False, 'penalty': float(args.penalty)},
             'corrector': {}
             }
-    elif args.method == 'dps':
+    elif args.method.lower() == 'dps':
         predictor = functools.partial(
             Euler_Maruyama_VE_sde_predictor,
             nloglik = lambda x: torch.linalg.norm(observation - ray_trafo(x)))
@@ -95,7 +95,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             'predictor': {'aTweedy': True, 'penalty': float(args.penalty)},
             'corrector': {}
             }
-    elif args.method == 'dds':
+    elif args.method.lower() == 'dds':
         sample_kwargs = {
             'num_steps': int(args.num_steps),
             'batch_size': config.sampling.batch_size,
@@ -157,12 +157,12 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
 
 def get_standard_ray_trafo(config):
 
-    if config.forward_op.trafo_name == 'simple_trafo':
+    if config.forward_op.trafo_name.lower() == 'simple_trafo':
         ray_trafo = SimpleTrafo(
             im_shape=(config.data.im_size, config.data.im_size), 
             num_angles=config.forward_op.num_angles)
 
-    elif config.forward_op.trafo_name == 'walnut_trafo':
+    elif config.forward_op.trafo_name.lower() == 'walnut_trafo':
         ray_trafo = get_walnut_2d_ray_trafo(
             data_path=config.data.data_path,
             matrix_path=config.data.data_path,
@@ -190,7 +190,7 @@ def get_data_from_ground_truth(ground_truth, ray_trafo, white_noise_rel_stddev):
 
 def get_standard_dataset(config, ray_trafo=None):
 
-    if config.data.name == 'DiskDistributedEllipsesDataset':
+    if config.data.name.lower() == 'DiskDistributedEllipsesDataset'.lower():
         dataset = get_disk_dist_ellipses_dataset(
         fold='test',
         im_size=config.data.im_size,
@@ -198,12 +198,12 @@ def get_standard_dataset(config, ray_trafo=None):
         diameter=config.data.diameter,
         max_n_ellipse=config.data.num_n_ellipse,
         device=config.device)
-    elif config.data.name == 'Walnut':
+    elif config.data.name.lower() == 'Walnut'.lower():
         dataset = get_walnut_data(config, ray_trafo)
-    elif config.data.name == 'LoDoPabCT':
+    elif config.data.name.lower() == 'LoDoPabCT'.lower():
         dataset = LoDoPabDatasetFromDival(im_size=config.data.im_size)
         dataset = dataset.get_testloader(batch_size=1, num_data_loader_workers=0)
-    elif config.data.name == 'Mayo': 
+    elif config.data.name.lower() == 'Mayo'.lower(): 
         dataset = MayoDataset(
             part=config.data.part, 
             base_path=config.data.base_path, 
@@ -216,13 +216,13 @@ def get_standard_dataset(config, ray_trafo=None):
 
 def get_standard_train_dataset(config): 
 
-    if config.data.name == 'EllipseDatasetFromDival':
+    if config.data.name.lower() == 'EllipseDatasetFromDival'.lower():
         ellipse_dataset = EllipseDatasetFromDival(impl='astra_cuda')
         train_dl = ellipse_dataset.get_trainloader(
             batch_size=config.training.batch_size, 
             num_data_loader_workers=0
         )
-    elif config.data.name == 'DiskDistributedEllipsesDataset':
+    elif config.data.name.lower() == 'DiskDistributedEllipsesDataset'.lower():
         if config.data.num_n_ellipse > 1:
             dataset = get_disk_dist_ellipses_dataset(
                 fold='train',
@@ -246,21 +246,21 @@ def get_standard_train_dataset(config):
 
 def get_standard_configs(args):
 
-    if args.model_learned_on == 'ellipses': # score-model pre-trainined on dataset configs 
+    if args.model_learned_on.lower() == 'ellipses': # score-model pre-trainined on dataset configs 
         from configs.disk_ellipses_configs import get_config
-    elif args.model_learned_on == 'lodopab':
+    elif args.model_learned_on.lower() == 'lodopab':
         from configs.lodopab_configs import get_config
     else:
         raise NotImplementedError
     config = get_config()
 
-    if args.dataset == 'ellipses': 	# validation dataset configs
+    if args.dataset.lower() == 'ellipses': 	# validation dataset configs
         from configs.disk_ellipses_configs import get_config
-    elif args.dataset == 'lodopab':
+    elif args.dataset.lower() == 'lodopab':
         from configs.lodopab_configs import get_config
-    elif args.dataset == 'walnut':
+    elif args.dataset.lower() == 'walnut':
         from configs.walnut_configs import get_config
-    elif args.dataset == 'mayo': 
+    elif args.dataset.lower() == 'mayo': 
         from configs.mayo_configs import get_config
     else:
         raise NotImplementedError
