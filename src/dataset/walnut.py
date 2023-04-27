@@ -6,8 +6,7 @@ from typing import List, Tuple
 from math import ceil
 import torch
 from torch import Tensor
-from .walnut_utils import (
-        get_projection_data, get_single_slice_ray_trafo,
+from .walnut_utils import (get_projection_data, get_single_slice_ray_trafo,
         get_single_slice_ind, get_ground_truth, VOL_SZ)
 
 

@@ -1,3 +1,4 @@
+from typing import Optional, Any, Dict
 import os 
 import torch 
 import torchvision
@@ -7,32 +8,31 @@ import functools
 from tqdm import tqdm 
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim import Adam
+from torch.utils.data import DataLoader
 from .losses import loss_fn
 from .ema import ExponentialMovingAverage
+from .sde import SDE
 
-from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector)
+from ..third_party_models import OpenAiUNetModel
+from ..samplers import BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector
 
 
 def score_model_simple_trainer(
-	score,
-	sde, 
-	train_dl, 
-	optim_kwargs,
-	val_kwargs,
-	device, 
-	log_dir='./'
+	score: OpenAiUNetModel,
+	sde: SDE, 
+	train_dl: DataLoader, 
+	optim_kwargs: Dict,
+	val_kwargs: Dict,
+	device: Optional[Any] = None, 
+	log_dir: str ='./'
 	) -> None:
-
-
 
 	writer = SummaryWriter(log_dir=log_dir, comment='training-score-model')
 	optimizer = Adam(score.parameters(), lr=optim_kwargs['lr'])
 	for epoch in range(optim_kwargs['epochs']):
-
 		avg_loss, num_items = 0, 0
 		score.train()
 		for idx, batch in tqdm(enumerate(train_dl), total = len(train_dl)):
-
 			x = batch.to(device)
 			loss = loss_fn(score, x, sde)
 			optimizer.zero_grad()
@@ -55,24 +55,22 @@ def score_model_simple_trainer(
 
 		if  epoch % val_kwargs['sample_freq']== 0:
 			score.eval()
-
 			sampler = BaseSampler(
-						score=score, 
-						sde=sde,
-						predictor=functools.partial(Euler_Maruyama_sde_predictor, nloglik = None),         
-						corrector=functools.partial(Langevin_sde_corrector, nloglik = None),
-						init_chain_fn=None,
-						sample_kwargs = {
-								'num_steps': val_kwargs['num_steps'],
-								'start_time_step': 0,
-								'batch_size': val_kwargs['batch_size'],
-								'im_shape': x.shape[1:],
-								'eps': val_kwargs['eps'],
-								'predictor': {'aTweedy': False},
-								'corrector': {'corrector_steps': 1}
-           					 }, 
-						device=device)
-						
+				score=score,
+				sde=sde,
+				predictor=functools.partial(Euler_Maruyama_sde_predictor, nloglik = None),
+				corrector=functools.partial(Langevin_sde_corrector, nloglik = None),
+				init_chain_fn=None,
+				sample_kwargs={
+					'num_steps': val_kwargs['num_steps'],
+					'start_time_step': 0,
+					'batch_size': val_kwargs['batch_size'],
+					'im_shape': x.shape[1:],
+					'eps': val_kwargs['eps'],
+					'predictor': {'aTweedy': False},
+					'corrector': {'corrector_steps': 1}
+					},
+				device=device)
 			x_mean = sampler.sample(logging=False)
 
 			sample_grid = torchvision.utils.make_grid(x_mean, normalize=True, scale_each=True)

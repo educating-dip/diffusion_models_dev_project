@@ -11,7 +11,7 @@ def get_config():
   data.im_size = 501
   data.stddev = 0.01
   data.base_path = '/localdata/jleuschn/data/LDCT-and-Projection-data'
-  data.part = 'N'
+  data.part = 'L'
   data.validation = validation = ml_collections.ConfigDict()
   validation.num_images = 5
   
