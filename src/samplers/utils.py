@@ -176,8 +176,8 @@ def _ddim_dds(
             )[:, None, None, None]
         tbeta = ((1 - mean_tminus1.pow(2)) / ( 1 - mean_t.pow(2) ) ).pow(.5) * (1 - mean_t.pow(2) * mean_tminus1.pow(-2) ).pow(.5) 
         xhat = xhat*mean_tminus1
-        noise_deterministic = torch.sqrt( 1 - mean_tminus1.pow(2) - beta.pow(2)*eta**2 )*s
-        noise_stochastic = eta*beta*torch.randn_like(xhat)
+        noise_deterministic = torch.sqrt( 1 - mean_tminus1.pow(2) - tbeta.pow(2)*eta**2 )*s
+        noise_stochastic = eta*tbeta*torch.randn_like(xhat)
     else:
         raise NotImplementedError
 
