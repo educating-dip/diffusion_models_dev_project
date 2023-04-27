@@ -13,7 +13,7 @@ from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDat
     get_disk_dist_ellipses_dataset, get_walnut_data)
 from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
 from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, 
-    chain_simple_init, decomposed_diffusion_sampling_VE_sde_predictor, conj_grad_closure)
+    chain_simple_init, decomposed_diffusion_sampling_sde_predictor, conj_grad_closure)
 
 def get_standard_score(config, sde, use_ema, load_model=True):
 
@@ -110,15 +110,12 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             ray_trafo=ray_trafo, 
             gamma=sample_kwargs['predictor']['gamma']
             )
-
-        beta = torch.tensor(1) if isinstance(sde, VESDE) else None
         predictor = functools.partial(
-            decomposed_diffusion_sampling_VE_sde_predictor,
+            decomposed_diffusion_sampling_sde_predictor,
             score=score,
             sde=sde,
             rhs=ray_trafo.trafo_adjoint(observation),
             conj_grad_closure=conj_grad_closure_partial,
-            beta=beta,
             cg_kwargs={'max_iter': 5, 'max_tridiag_iter': 4}
         )
     else:
@@ -243,9 +240,11 @@ def get_standard_train_dataset(config):
         train_dl = torch.utils.data.DataLoader(dataset, batch_size=3, shuffle=False, num_workers=16)
     elif config.data.name.lower() == 'LoDoPabCT'.lower():
         dataset = LoDoPabDatasetFromDival(im_size=config.data.im_size)
-        train_dl = dataset.get_trainloader(batch_size=config.training.batch_size, num_data_loader_workers=16)
-
-
+        train_dl = dataset.get_trainloader(
+            batch_size=config.training.batch_size,
+            num_data_loader_workers=16
+            )
+    
     return train_dl
 
 def get_standard_configs(args):

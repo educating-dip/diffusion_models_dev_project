@@ -67,6 +67,16 @@ class BaseSampler:
         for i in tqdm(range(self.sample_kwargs['start_time_step'], self.sample_kwargs['num_steps'])):     
             time_step = torch.ones(self.sample_kwargs['batch_size'], device=self.device) * time_steps[i]
 
+            x, x_mean = self.predictor(
+                score=self.score,
+                sde=self.sde,
+                x=x,
+                time_step=time_step,
+                step_size=step_size,
+                datafitscale=i/self.sample_kwargs['num_steps'],
+                **self.sample_kwargs['predictor']
+                )
+
             if self.corrector is not None:
                 x = self.corrector(
                     x=x,
@@ -77,16 +87,6 @@ class BaseSampler:
                     **self.sample_kwargs['corrector']
                     )
 
-            x, x_mean = self.predictor(
-                score=self.score,
-                sde=self.sde,
-                x=x,
-                time_step=time_step,
-                step_size=step_size,
-                datafitscale=i/self.sample_kwargs['num_steps'],
-                **self.sample_kwargs['predictor']
-                )
-            
             if logging:
                 if (i - self.sample_kwargs['start_time_step']) % logg_kwargs['num_img_in_log'] == 0:
                     writer.add_image('reco', torchvision.utils.make_grid(x_mean.squeeze(), normalize=True, scale_each=True), i)

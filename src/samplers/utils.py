@@ -5,7 +5,7 @@ import numpy as np
 
 from torch import Tensor
 from src.utils.impl_linear_cg import linear_cg
-from src.utils import SDE
+from src.utils import SDE, VESDE, VPSDE
 from src.physics import BaseRayTrafo
 from src.third_party_models import OpenAiUNetModel
 
@@ -97,7 +97,7 @@ def Langevin_sde_corrector(
         x = x + langevin_step_size * overall_grad + torch.sqrt(2 * langevin_step_size) * torch.randn_like(x)
     return x.detach()
 
-def decomposed_diffusion_sampling_VE_sde_predictor( 
+def decomposed_diffusion_sampling_sde_predictor( 
     score: OpenAiUNetModel,
     sde: SDE,
     x: Tensor,
@@ -108,7 +108,6 @@ def decomposed_diffusion_sampling_VE_sde_predictor(
     gamma: float,
     step_size: float,
     cg_kwargs: Dict,
-    beta: Optional[float] = None,
     datafitscale: Optional[float] = None # placeholder 
     ) -> Tuple[Tensor, Tensor]:
 
@@ -133,7 +132,12 @@ def decomposed_diffusion_sampling_VE_sde_predictor(
     rhs_flat = rhs.reshape(np.prod(xhat0.shape[2:]), xhat0.shape[0])
     initial_guess = xhat0.reshape(np.prod(xhat0.shape[2:]), xhat0.shape[0])
     reg_rhs_flat = rhs_flat*gamma + initial_guess
-    xhat, _= linear_cg(matmul_closure=conj_grad_closure, rhs=reg_rhs_flat, initial_guess=initial_guess, **cg_kwargs)
+    xhat, _= linear_cg(
+        matmul_closure=conj_grad_closure, 
+        rhs=reg_rhs_flat, 
+        initial_guess=initial_guess, 
+        **cg_kwargs # early-stop CG
+        )
     xhat = xhat.T.view(xhat0.shape[0], 1, *xhat0.shape[2:])
     '''
     It implemets the predictor sampling strategy presented in
@@ -144,22 +148,49 @@ def decomposed_diffusion_sampling_VE_sde_predictor(
             year={2020}
         }, available at https://arxiv.org/pdf/2010.02502.pdf.
     '''
-    std_t = sde.marginal_prob_std(time_step)[:, None, None, None]
-    std_tminus1 = sde.marginal_prob_std(time_step - step_size)[:, None, None, None]
-    beta = 1 - std_tminus1.pow(2)/std_t.pow(2) if beta is None else beta
-    noise_deterministic = - std_tminus1*std_t*torch.sqrt(1-beta.pow(2)*eta**2)*s
-    noise_stochastic = std_tminus1*eta*beta*torch.randn_like(x)
-    x = xhat + noise_deterministic + noise_stochastic
+    x = _ddim_dds(sde=sde, s=s, xhat=xhat, time_step=time_step, step_size=step_size, eta=eta)
 
     return x.detach(), xhat
+
+def _ddim_dds(
+    sde: SDE,
+    s: Tensor,
+    xhat: Tensor,
+    time_step: Tensor,
+    step_size: Tensor, 
+    eta: float
+    ) -> Tensor:
+    
+    std_t = sde.marginal_prob_std(t=time_step
+        )[:, None, None, None]
+    std_tminus1 = sde.marginal_prob_std(t=time_step-step_size
+        )[:, None, None, None]
+    if isinstance(sde, VESDE):
+        tbeta = 1 - (std_tminus1.pow(2) * std_t.pow(-2))
+        noise_deterministic = - std_tminus1*std_t*torch.sqrt( 1 - tbeta.pow(2)*eta**2 ) * s
+        noise_stochastic = eta*tbeta*torch.randn_like(xhat)
+    elif isinstance(sde, VPSDE):
+        mean_tminus1 = sde.marginal_prob_mean(t=time_step-step_size
+            )[:, None, None, None]
+        mean_t = sde.marginal_prob_mean(t=time_step
+            )[:, None, None, None]
+        tbeta = ((1 - mean_tminus1.pow(2)) / ( 1 - mean_t.pow(2) ) ).pow(.5) * (1 - mean_t.pow(2) * mean_tminus1.pow(-2) ).pow(.5) 
+        xhat = xhat*mean_tminus1
+        noise_deterministic = torch.sqrt( 1 - mean_tminus1.pow(2) - beta.pow(2)*eta**2 )*s
+        noise_stochastic = eta*beta*torch.randn_like(xhat)
+    else:
+        raise NotImplementedError
+
+    return xhat + noise_deterministic + noise_stochastic
 
 def _aTweedy(s: Tensor, x: Tensor, sde: SDE, time_step:Tensor) -> Tensor:
 
     update = x + s*sde.marginal_prob_std(time_step)[:, None, None, None].pow(2)
-    div = sde.marginal_prob_mean(time_step).pow(-1)[:, None, None, None]
+    div = sde.marginal_prob_mean(time_step)[:, None, None, None].pow(-1)
     return update*div
 
 def conj_grad_closure(x: Tensor, ray_trafo: BaseRayTrafo, gamma: float = 1e-5):
+
     batch_size = x.shape[-1]
     x = x.T.reshape(batch_size, 1, *ray_trafo.im_shape)
     return (gamma*ray_trafo.trafo_adjoint(ray_trafo(x)) + x).view(batch_size, np.prod(ray_trafo.im_shape)).T
