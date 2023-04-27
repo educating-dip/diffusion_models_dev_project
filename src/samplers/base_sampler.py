@@ -45,11 +45,11 @@ class BaseSampler:
             log_interval = (self.sample_kwargs['num_steps'] - self.sample_kwargs['start_time_step']) / logg_kwargs['num_img_in_log']
         
         time_steps = np.linspace(1., self.sample_kwargs['eps'], self.sample_kwargs['num_steps'])
+
         step_size = time_steps[0] - time_steps[1]
         if self.sample_kwargs['start_time_step'] == 0:
             t = torch.ones(self.sample_kwargs['batch_size'], device=self.device)
-            init_x = torch.randn(self.sample_kwargs['batch_size'], 
-                *self.sample_kwargs['im_shape'], device=self.device) * self.sde.marginal_prob_std(t)[:, None, None, None]
+            init_x = self.sde.prior_sampling([self.sample_kwargs['batch_size'], *self.sample_kwargs['im_shape']]).to(self.device)
         else:
             init_x = self.init_chain_fn(time_steps=time_steps)
         

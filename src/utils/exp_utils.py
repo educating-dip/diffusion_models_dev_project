@@ -77,7 +77,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             'num_steps': int(args.num_steps),
             'start_time_step': ceil(float(args.pct_chain_elapsed) * int(args.num_steps)),
             'batch_size': config.sampling.batch_size,
-            'im_shape': ray_trafo.im_shape,
+            'im_shape': [1, *ray_trafo.im_shape],
             'eps': config.sampling.eps,
             'predictor': {'aTweedy': False, 'penalty': float(args.penalty)},
             'corrector': {}
@@ -90,7 +90,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             'num_steps': int(args.num_steps),
             'batch_size': config.sampling.batch_size,
             'start_time_step': ceil(float(args.pct_chain_elapsed) * int(args.num_steps)),
-            'im_shape': ray_trafo.im_shape,
+            'im_shape': [1, *ray_trafo.im_shape],
             'eps': config.sampling.eps,
             'predictor': {'aTweedy': True, 'penalty': float(args.penalty)},
             'corrector': {}
@@ -100,7 +100,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             'num_steps': int(args.num_steps),
             'batch_size': config.sampling.batch_size,
             'start_time_step': ceil(float(args.pct_chain_elapsed) * int(args.num_steps)),
-            'im_shape': ray_trafo.im_shape,
+            'im_shape': [1, *ray_trafo.im_shape],
             'eps': config.sampling.eps,
             'predictor': {'eta': float(args.eta), 'gamma': float(args.gamma)},
             'corrector': {}
@@ -252,7 +252,11 @@ def get_standard_configs(args):
     if args.model_learned_on.lower() == 'ellipses': # score-model pre-trainined on dataset configs 
         from configs.disk_ellipses_configs import get_config
     elif args.model_learned_on.lower() == 'lodopab':
-        from configs.lodopab_configs import get_config
+        if args.sde.lower() == "vesde":
+            from configs.lodopab_configs import get_config
+        elif args.sde.lower() == "vpsde":
+            print("LOAD VPSDE")
+            from configs.lodopab_vpsde_configs import get_config
     else:
         raise NotImplementedError
     config = get_config()

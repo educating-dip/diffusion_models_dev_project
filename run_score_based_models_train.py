@@ -6,14 +6,15 @@ import functools
 from datetime import datetime
 from src import (get_standard_sde, score_model_simple_trainer, get_standard_score, get_standard_configs, get_standard_train_dataset)
 
-from configs.disk_ellipses_configs import get_config
+#from configs.disk_ellipses_configs import get_config
+from configs.lodopab_vpsde_configs import get_config
 
 def coordinator():
 
 	config = get_config()
 	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=False, load_model=False)
-	log_dir = './score_based_baseline/checkpoints/' + datetime.now().strftime('%Y_%m_%d_%H:%m')
+	log_dir = '/localdata/AlexanderDenker/score_based_baseline/LoDoPabCT/checkpoints/' + datetime.now().strftime('%Y_%m_%d_%H:%m')
 
 	if not os.path.exists(log_dir):
 		os.makedirs(log_dir)
