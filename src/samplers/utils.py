@@ -108,7 +108,8 @@ def decomposed_diffusion_sampling_sde_predictor(
     gamma: float,
     step_size: float,
     cg_kwargs: Dict,
-    datafitscale: Optional[float] = None # placeholder 
+    datafitscale: Optional[float] = None, # placeholder
+    use_simplified_eqn: bool = False
     ) -> Tuple[Tensor, Tensor]:
 
     '''
@@ -148,7 +149,7 @@ def decomposed_diffusion_sampling_sde_predictor(
             year={2020}
         }, available at https://arxiv.org/pdf/2010.02502.pdf.
     '''
-    x = _ddim_dds(sde=sde, s=s, xhat=xhat, time_step=time_step, step_size=step_size, eta=eta)
+    x = _ddim_dds(sde=sde, s=s, xhat=xhat, time_step=time_step, step_size=step_size, eta=eta, use_simplified_eqn=use_simplified_eqn)
 
     return x.detach(), xhat
 
@@ -158,17 +159,19 @@ def _ddim_dds(
     xhat: Tensor,
     time_step: Tensor,
     step_size: Tensor, 
-    eta: float
+    eta: float, 
+    use_simplified_eqn: bool = False
     ) -> Tensor:
     
-    std_t = sde.marginal_prob_std(t=time_step
-        )[:, None, None, None]
-    std_tminus1 = sde.marginal_prob_std(t=time_step-step_size
-        )[:, None, None, None]
     if isinstance(sde, VESDE):
-        tbeta = 1 - (std_tminus1.pow(2) * std_t.pow(-2))
+        std_t = sde.marginal_prob_std(t=time_step
+            )[:, None, None, None]
+        std_tminus1 = sde.marginal_prob_std(t=time_step-step_size
+            )[:, None, None, None]
+        tbeta = 1 - ( std_tminus1.pow(2) * std_t.pow(-2) ) if not use_simplified_eqn else torch.tensor(1.) 
         noise_deterministic = - std_tminus1*std_t*torch.sqrt( 1 - tbeta.pow(2)*eta**2 ) * s
         noise_stochastic = eta*tbeta*torch.randn_like(xhat)
+        if use_simplified_eqn: noise_stochastic = std_tminus1 * noise_stochastic
     elif isinstance(sde, VPSDE):
         mean_tminus1 = sde.marginal_prob_mean(t=time_step-step_size
             )[:, None, None, None]

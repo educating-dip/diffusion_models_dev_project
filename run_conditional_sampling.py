@@ -20,7 +20,7 @@ parser.add_argument('--penalty', default=1, help='reg. penalty used for ``naive'
 parser.add_argument('--gamma', default=0.01, help='reg. used for ``dds''.')
 parser.add_argument('--eta', default=0.15, help='reg. used for ``dds'' weighting stochastic and deterministic noise.')
 parser.add_argument('--pct_chain_elapsed', default=0,  help='``pct_chain_elapsed'' actives init of chain')
-parser.add_argument('--sde', default="vesde", choices=["vpsde", "vesde"])
+parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde'])
 
 def coordinator(args):
 
@@ -30,11 +30,7 @@ def coordinator(args):
 
 	if config.seed is not None:
 		torch.manual_seed(config.seed) # for reproducible noise in simulate
-	''' 
-	This sets the Forward SDE. Either Variance Exploding SDE or Variance Preserving SDE refer to Appendix C 
-		in ``SCORE-BASED GENERATIVE MODELING THROUGH STOCHASTIC DIFFERENTIAL EQUATIONS''
-		at https://arxiv.org/pdf/2011.13456.pdf. 
-	'''
+
 	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=args.ema)
 	score = score.to(config.device)

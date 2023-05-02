@@ -102,7 +102,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             'start_time_step': ceil(float(args.pct_chain_elapsed) * int(args.num_steps)),
             'im_shape': [1, *ray_trafo.im_shape],
             'eps': config.sampling.eps,
-            'predictor': {'eta': float(args.eta), 'gamma': float(args.gamma)},
+            'predictor': {'eta': float(args.eta), 'gamma': float(args.gamma), 'use_simplified_eqn': True},
             'corrector': {}
             }
         conj_grad_closure_partial = functools.partial(
@@ -252,10 +252,11 @@ def get_standard_configs(args):
     if args.model_learned_on.lower() == 'ellipses': # score-model pre-trainined on dataset configs 
         from configs.disk_ellipses_configs import get_config
     elif args.model_learned_on.lower() == 'lodopab':
-        if args.sde.lower() == "vesde":
+        if args.sde.lower() == 'vesde':
+            print('Loading Variance Exploding SDE model')
             from configs.lodopab_configs import get_config
-        elif args.sde.lower() == "vpsde":
-            print("LOAD VPSDE")
+        elif args.sde.lower() == 'vpsde':
+            print('Loading Variance Preserving SDE model')
             from configs.lodopab_vpsde_configs import get_config
     else:
         raise NotImplementedError
