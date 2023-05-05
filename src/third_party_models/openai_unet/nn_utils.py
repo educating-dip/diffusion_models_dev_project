@@ -85,8 +85,12 @@ def normalization(channels):
     """
     return GroupNorm32(32, channels)
 
-
-def timestep_embedding(timesteps, dim, max_period=10000):
+###
+# This timestep_embedding function was used to discrete time steps from [0, 1, ..., N]
+# We are using continous time steps ~ U[0,1], so we have to change 
+# the max_period. max_period=0.005 works well for this time range
+###
+def timestep_embedding(timesteps, dim, max_period=10000): 
     """
     Create sinusoidal timestep embeddings.
     :param timesteps: a 1-D Tensor of N indices, one per batch element.

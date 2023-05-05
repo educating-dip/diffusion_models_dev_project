@@ -393,6 +393,7 @@ class OpenAiUNetModel(nn.Module):
     :param resblock_updown: use residual blocks for up/downsampling.
     :param use_new_attention_order: use a different attention pattern for potentially
                                     increased efficiency.
+    :param max_period, controls the frequency in the time embedding 
     """
 
     def __init__(
@@ -413,6 +414,7 @@ class OpenAiUNetModel(nn.Module):
         use_scale_shift_norm=False,
         resblock_updown=False,
         use_new_attention_order=False,
+        max_period=0.005,
         
     ):
         super().__init__()
@@ -432,6 +434,7 @@ class OpenAiUNetModel(nn.Module):
         self.num_heads = num_heads
         self.num_head_channels = num_head_channels
         self.num_heads_upsample = num_heads_upsample
+        self.max_period = max_period
 
         self.concat = Concat()
 
@@ -578,7 +581,7 @@ class OpenAiUNetModel(nn.Module):
         """
 
         hs = []
-        emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
+        emb = self.time_embed(timestep_embedding(timesteps, self.model_channels, self.max_period))
 
         h = x.type(self.dtype)
         for module in self.input_blocks:
