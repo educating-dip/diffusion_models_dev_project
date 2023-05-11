@@ -153,6 +153,57 @@ def decomposed_diffusion_sampling_sde_predictor(
 
     return x.detach(), xhat
 
+
+
+def adapted_ddim_sde_predictor( 
+    score: OpenAiUNetModel,
+    sde: SDE,
+    x: Tensor,
+    time_step: Tensor,
+    eta: float,
+    step_size: float,
+    ray_trafo, 
+    observation, 
+    datafitscale: Optional[float] = None, # placeholder
+    use_simplified_eqn: bool = False
+    ) -> Tuple[Tensor, Tensor]:
+
+    datafitscale = 1. # lace-holder
+
+    score.train() 
+
+    # only tune biases which are not in emb_layers
+    for name, param in score.named_parameters():
+        param.requires_grad = True
+        #param.requires_grad = False
+        #if "bias" in name and not "emb_layers" in name:
+        #    param.requires_grad = True
+
+    optim = torch.optim.Adam(score.parameters(), lr=3e-4)
+
+    for i in range(5):
+        optim.zero_grad()
+        s = score(x, time_step)
+        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step)
+
+        loss = torch.mean((ray_trafo(xhat0) - observation)**2)
+
+        loss.backward()
+        optim.step()
+
+    score.eval()
+
+    with torch.no_grad():
+        s = score(x, time_step)
+        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step) # Tweedy denoising step
+
+    x = _ddim_dds(sde=sde, s=s, xhat=xhat0, time_step=time_step, step_size=step_size, eta=eta, use_simplified_eqn=use_simplified_eqn)
+
+    return x.detach(), xhat0
+
+
+
+
 def _ddim_dds(
     sde: SDE,
     s: Tensor,

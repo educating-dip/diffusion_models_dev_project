@@ -13,7 +13,8 @@ from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDat
     get_disk_dist_ellipses_dataset, get_walnut_data)
 from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
 from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, 
-    chain_simple_init, decomposed_diffusion_sampling_sde_predictor, conj_grad_closure)
+    chain_simple_init, decomposed_diffusion_sampling_sde_predictor, 
+    conj_grad_closure, adapted_ddim_sde_predictor)
 
 def get_standard_score(config, sde, use_ema, load_model=True):
 
@@ -151,6 +152,52 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
         )
     
     return sampler
+
+def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observation=None, device=None):
+
+    if args.method.lower() == 'dds':
+        sample_kwargs = {
+            'num_steps': int(args.num_steps),
+            'batch_size': config.sampling.batch_size,
+            'start_time_step': 0,
+            'im_shape': [1, config.data.im_size, config.data.im_size],
+            'eps': config.sampling.eps,
+            'predictor': {'eta': float(args.eta), 'use_simplified_eqn': True},
+            'corrector': {}
+            }
+
+        predictor = functools.partial(
+            adapted_ddim_sde_predictor,
+            score=score,
+            sde=sde,
+            observation=observation,
+            ray_trafo=ray_trafo
+        )
+    else:
+        raise NotImplementedError
+
+    corrector = None
+    if args.add_corrector_step:
+        corrector = functools.partial(Langevin_sde_corrector)
+        sample_kwargs['corrector']['corrector_steps'] = 1
+        sample_kwargs['corrector']['penalty'] = float(args.penalty)
+
+    init_chain_fn = None
+    
+    sampler = BaseSampler(
+        score=score, 
+        sde=sde,
+        predictor=predictor,         
+        corrector=corrector,
+        init_chain_fn=init_chain_fn,
+        sample_kwargs=sample_kwargs, 
+        device=config.device
+        )
+    
+    return sampler
+
+
+
 
 def get_standard_ray_trafo(config):
 
