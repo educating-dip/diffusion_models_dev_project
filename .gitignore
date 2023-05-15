@@ -21,6 +21,6 @@ __pycache__/
 
 exp/
 results/
-
+score_model/
 
 checkpoints/
