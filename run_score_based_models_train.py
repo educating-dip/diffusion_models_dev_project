@@ -8,6 +8,7 @@ from src import (get_standard_sde, score_model_simple_trainer, get_standard_scor
 
 #from configs.disk_ellipses_configs import get_config
 from configs.lodopab_vpsde_configs import get_config
+#from configs.lodopab_configs import get_config
 
 def coordinator():
 

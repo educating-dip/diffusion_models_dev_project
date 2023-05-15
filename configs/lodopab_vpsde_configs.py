@@ -22,7 +22,7 @@ def get_config():
   config.sde = sde = ml_collections.ConfigDict()
   sde.type = 'vpsde'
   sde.beta_min = 0.1
-  sde.beta_max = 5
+  sde.beta_max = 10 #5
 
   config.validation.num_steps = 500
 
