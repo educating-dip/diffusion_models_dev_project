@@ -3,6 +3,11 @@ from typing import Optional, Any, Dict, Tuple
 import torch
 import numpy as np
 
+
+from odl.solvers.iterative.iterative import conjugate_gradient
+from odl.operator.default_ops import IdentityOperator
+
+
 from torch import Tensor
 from src.utils.impl_linear_cg import linear_cg
 from src.utils import SDE, VESDE, VPSDE
@@ -97,6 +102,13 @@ def Langevin_sde_corrector(
         x = x + langevin_step_size * overall_grad + torch.sqrt(2 * langevin_step_size) * torch.randn_like(x)
     return x.detach()
 
+
+"""
+This version of the DDS Sampler uses CG from GPytorch. This seemed to be unstable. 
+The ODL version with exactly the same operator and RHS works just fine. 
+"""
+
+"""
 def decomposed_diffusion_sampling_sde_predictor( 
     score: OpenAiUNetModel,
     sde: SDE,
@@ -152,8 +164,84 @@ def decomposed_diffusion_sampling_sde_predictor(
     x = _ddim_dds(sde=sde, s=s, xhat=xhat, time_step=time_step, step_size=step_size, eta=eta, use_simplified_eqn=use_simplified_eqn)
 
     return x.detach(), xhat
+"""
+
+def decomposed_diffusion_sampling_sde_predictor( 
+    score: OpenAiUNetModel,
+    sde: SDE,
+    x: Tensor,
+    rhs: Tensor, # this is already A^* y
+    time_step: Tensor,
+    conj_grad_closure: callable, 
+    eta: float,
+    gamma: float,
+    step_size: float,
+    cg_kwargs: Dict,
+    datafitscale: Optional[float] = None, # placeholder
+    use_simplified_eqn: bool = False,
+    ray_trafo: callable = None
+    ) -> Tuple[Tensor, Tensor]:
+
+    '''
+    It implements ``Decomposed Diffusion Sampling'' for the VE-SDE model 
+        presented in 
+            1. @article{chung2023fast,
+                title={Fast Diffusion Sampler for Inverse Problems by Geometric Decomposition},
+                author={Chung, Hyungjin and Lee, Suhyeon and Ye, Jong Chul},
+                journal={arXiv preprint arXiv:2303.05754},
+                year={2023}
+            },
+    available at https://arxiv.org/pdf/2303.05754.pdf. See Algorithm 4 in Appendix. 
+    '''
+    '''
+    Implements the Tweedy denosing step proposed in ``Diffusion Posterior Sampling''.
+    '''
+    datafitscale = 1. # lace-holder
+
+    s = score(x, time_step).detach()
+    xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step) # Tweedy denoising step
+     
+    ray_trafo_op = ray_trafo.ray_trafo_op_fun.operator
+    ray_trafo_adjoint_op = ray_trafo.ray_trafo_adjoint_op_fun.operator
 
 
+    rhs = ray_trafo_op.domain.element(rhs[0,0,:,:].cpu().numpy())
+    I = IdentityOperator(ray_trafo_op.domain)
+        
+    # cg step 
+    x_cg = torch.clone(xhat0.detach())
+    x_cg_odl = ray_trafo_op.domain.element(x_cg[0,0,:,:].cpu().numpy())
+
+    rhs = x_cg_odl + gamma*rhs
+    operator = I + gamma*ray_trafo_adjoint_op*ray_trafo_op
+    conjugate_gradient(operator, x_cg_odl, rhs, niter=4)
+
+    x_proj = torch.from_numpy(np.asarray(x_cg_odl)).to(xhat0.device)
+    x_proj = x_proj.unsqueeze(0).unsqueeze(0)
+
+    xhat = x_proj
+
+    
+    '''
+    It implemets the predictor sampling strategy presented in
+        2. @article{song2020denoising,
+            title={Denoising diffusion implicit models},
+            author={Song, Jiaming and Meng, Chenlin and Ermon, Stefano},
+            journal={arXiv preprint arXiv:2010.02502},
+            year={2020}
+        }, available at https://arxiv.org/pdf/2010.02502.pdf.
+    '''
+    x = _ddim_dds(sde=sde, s=s, xhat=xhat, time_step=time_step, step_size=step_size, eta=eta, use_simplified_eqn=use_simplified_eqn)
+
+    return x.detach(), xhat
+
+
+
+def tv_loss(x):
+
+    dh = torch.abs(x[..., :, 1:] - x[..., :, :-1])
+    dw = torch.abs(x[..., 1:, :] - x[..., :-1, :])
+    return torch.sum(dh[..., :-1, :] + dw[..., :, :-1])
 
 def adapted_ddim_sde_predictor( 
     score: OpenAiUNetModel,
@@ -168,25 +256,34 @@ def adapted_ddim_sde_predictor(
     use_simplified_eqn: bool = False
     ) -> Tuple[Tensor, Tensor]:
 
-    datafitscale = 1. # lace-holder
+    datafitscale = 1. # place-holder
 
     score.train() 
 
+    #TODO: set as a function
     # only tune biases which are not in emb_layers
     for name, param in score.named_parameters():
-        param.requires_grad = True
-        #param.requires_grad = False
+        #param.requires_grad = True
+        param.requires_grad = False
         #if "bias" in name and not "emb_layers" in name:
         #    param.requires_grad = True
+    
+    for name, param in score.out.named_parameters():
+        param.requires_grad = True
+        
+    for name, param in score.output_blocks.named_parameters():
+        if not "emb_layers" in name:
+            param.requires_grad = True
+        
 
     optim = torch.optim.Adam(score.parameters(), lr=3e-4)
-
-    for i in range(5):
+    gamma = 1e-5
+    for i in range(10):
         optim.zero_grad()
         s = score(x, time_step)
         xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step)
 
-        loss = torch.mean((ray_trafo(xhat0) - observation)**2)
+        loss = torch.mean((ray_trafo(xhat0) - observation)**2)  #+ gamma * tv_loss(xhat0)
 
         loss.backward()
         optim.step()
@@ -194,15 +291,12 @@ def adapted_ddim_sde_predictor(
     score.eval()
 
     with torch.no_grad():
-        s = score(x, time_step)
+        s = score(x, time_step) # - grad tv(x)
         xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step) # Tweedy denoising step
 
     x = _ddim_dds(sde=sde, s=s, xhat=xhat0, time_step=time_step, step_size=step_size, eta=eta, use_simplified_eqn=use_simplified_eqn)
 
     return x.detach(), xhat0
-
-
-
 
 def _ddim_dds(
     sde: SDE,

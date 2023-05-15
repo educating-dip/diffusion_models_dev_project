@@ -23,8 +23,16 @@ parser.add_argument('--pct_chain_elapsed', default=0,  help='``pct_chain_elapsed
 parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde'])
 
 def coordinator(args):
+	if args.model_learned_on == "ellipses":
+		load_path = "/localdata/AlexanderDenker/score_based_baseline/DiskEllipses/checkpoints/2023_05_11_08:05"
 
-	config, dataconfig = get_standard_configs(args)
+		with open(os.path.join(load_path, "report.yaml"), "r") as stream:
+			config = yaml.load(stream, Loader=yaml.UnsafeLoader)
+			config.sampling.load_model_from_path = load_path
+
+			print(config.sde.type)
+
+	_, dataconfig = get_standard_configs(args)
 	save_root = get_standard_path(args)
 	save_root.mkdir(parents=True, exist_ok=True)
 
@@ -40,6 +48,9 @@ def coordinator(args):
 	ray_trafo = ray_trafo.to(device=config.device)
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
 
+	print("num images: ", config.data.validation.num_images)
+	psnr_list = [] 
+	ssim_list = []
 	for i, data_sample in enumerate(islice(dataset, config.data.validation.num_images)):
 		if len(data_sample) == 3:
 			observation, ground_truth, filtbackproj = data_sample
@@ -53,7 +64,7 @@ def coordinator(args):
 				white_noise_rel_stddev=dataconfig.data.stddev
 				)
 
-		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 10,
+		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 5,
 			'sample_num':i, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
 		sampler = get_standard_sampler(
 			args=args,
@@ -71,9 +82,23 @@ def coordinator(args):
 			str(save_root / f'recon_{i}_info.pt')	)
 			
 		print(	f'reconstruction of sample {i}'	)
-		print(	'PSNR:', PSNR(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())	)
-		print(	'SSIM:', SSIM(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())	)
+		psnr = PSNR(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
+		ssim = SSIM(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())	
+		psnr_list.append(psnr)
+		ssim_list.append(ssim)
+		print(	'PSNR:', psnr)
+		print(	'SSIM:', ssim)
 	
+		#fig, (ax1, ax2) = plt.subplots(1,2)
+		#ax1.imshow(ground_truth[0,0,:,:].detach().cpu())
+		#ax1.axis("off")
+		#ax1.set_title("Ground truth")
+		#ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu())
+		#ax2.axis("off")
+		#ax2.set_title("Naive with penalty = " + str(args.penalty))
+		#plt.show() 
+
+
 	report = {}
 	report.update(vars(args))
 	report.update(dict(config.items()))

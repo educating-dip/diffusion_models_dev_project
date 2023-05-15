@@ -103,7 +103,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             'start_time_step': ceil(float(args.pct_chain_elapsed) * int(args.num_steps)),
             'im_shape': [1, *ray_trafo.im_shape],
             'eps': config.sampling.eps,
-            'predictor': {'eta': float(args.eta), 'gamma': float(args.gamma), 'use_simplified_eqn': True},
+            'predictor': {'eta': float(args.eta), 'gamma': float(args.gamma), 'use_simplified_eqn': True, 'ray_trafo': ray_trafo},
             'corrector': {}
             }
         conj_grad_closure_partial = functools.partial(
@@ -325,7 +325,8 @@ def get_standard_configs(args):
 
 def get_standard_path(args):
 
-    path = './score_model/outputs/'
+    #path = './score_model/outputs/'
+    path = '/localdata/AlexanderDenker/score_model/outputs/'
     path += args.model_learned_on + '_' + args.dataset
     return Path(os.path.join(path, f'{time.strftime("%d-%m-%Y-%H-%M-%S")}'))
 	

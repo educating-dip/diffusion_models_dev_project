@@ -65,6 +65,10 @@ def coordinator(args):
 
 		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 10, 'sample_num': 1, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
 
+		plt.figure()
+		plt.imshow(filtbackproj[0,0,:,:].cpu().numpy())
+		plt.show()
+
 		sampler = get_standard_adapted_sampler(
 				args=args,
 				config=config,
@@ -79,7 +83,11 @@ def coordinator(args):
 		print(recon.shape)
 		fig, (ax1, ax2) = plt.subplots(1,2)
 		ax1.imshow(ground_truth[0,0,:,:].detach().cpu())
+		ax1.axis("off")
+		ax1.set_title("Ground truth")
 		ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu())
+		ax2.axis("off")
+		ax2.set_title("Adaptation Sampling")
 		plt.show() 
 
 if __name__ == '__main__':
