@@ -4,6 +4,7 @@ import torch
 import functools
 from math import ceil
 from pathlib import Path
+import yaml 
 
 from .sde import VESDE, VPSDE
 from .ema import ExponentialMovingAverage
@@ -47,7 +48,7 @@ def get_standard_score(config, sde, use_ema, load_model=True):
             ema.load_state_dict(torch.load(os.path.join(config.sampling.load_model_from_path,'ema_model.pt')))
             ema.copy_to(score.parameters())
         else:
-            score.load_state_dict(torch.load(os.path.join(config.sampling.load_model_from_path, config.sampling.model_name)))
+            score.load_state_dict(torch.load(os.path.join(config.sampling.load_model_from_path, 'model.pt')))
 
     return score
 
@@ -117,7 +118,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             sde=sde,
             rhs=ray_trafo.trafo_adjoint(observation),
             conj_grad_closure=conj_grad_closure_partial,
-            cg_kwargs={'max_iter': 5, 'max_tridiag_iter': 4}
+            cg_kwargs={'max_iter': int(args.cg_iter), 'max_tridiag_iter': None}
         )
     else:
         raise NotImplementedError
@@ -294,20 +295,24 @@ def get_standard_train_dataset(config):
     
     return train_dl
 
-def get_standard_configs(args):
+def get_standard_configs(args, base_path="/localdata/AlexanderDenker/score_based_baseline"):
 
-    if args.model_learned_on.lower() == 'ellipses': # score-model pre-trainined on dataset configs 
-        from configs.disk_ellipses_configs import get_config
+    version = "version_{:02d}".format(int(args.version))
+    if args.model_learned_on.lower() == 'ellipses': 
+        load_path = os.path.join(base_path, "DiskEllipses", args.sde.lower(), version)
+
+        with open(os.path.join(load_path, "report.yaml"), "r") as stream:
+            config = yaml.load(stream, Loader=yaml.UnsafeLoader)
+            config.sampling.load_model_from_path = load_path
+
     elif args.model_learned_on.lower() == 'lodopab':
-        if args.sde.lower() == 'vesde':
-            print('Loading Variance Exploding SDE model')
-            from configs.lodopab_configs import get_config
-        elif args.sde.lower() == 'vpsde':
-            print('Loading Variance Preserving SDE model')
-            from configs.lodopab_vpsde_configs import get_config
+        load_path = os.path.join(base_path, "LoDoPabCT", args.sde.lower(), version)
+
+        with open(os.path.join(load_path, "report.yaml"), "r") as stream:
+            config = yaml.load(stream, Loader=yaml.UnsafeLoader)
+            config.sampling.load_model_from_path = load_path
     else:
         raise NotImplementedError
-    config = get_config()
 
     if args.dataset.lower() == 'ellipses': 	# validation dataset configs
         from configs.disk_ellipses_configs import get_config

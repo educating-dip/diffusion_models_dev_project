@@ -8,12 +8,15 @@ def get_default_configs():
 
     # sde configs
     config.sde = sde = ml_collections.ConfigDict()
-    sde.type = 'vesde'
+    sde.type = 'vpsde' #'vesde'
     #sde.sigma = 25.0
     # the largest noise scale sigma_max was choosen according to Technique 1 from [https://arxiv.org/pdf/2006.09011.pdf], 
     # i.e. to be as large as the maximum eucledian distance between pairs of data -> ~100
     sde.sigma_min = 0.01
     sde.sigma_max = 100
+
+    sde.beta_min = 0.1
+    sde.beta_max = 10
 
     # training configs
     config.training = training = ml_collections.ConfigDict()

@@ -13,6 +13,8 @@ parser = argparse.ArgumentParser(description='conditional sampling')
 parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=['walnut', 'lodopab', 'ellipses', 'mayo'])
 parser.add_argument('--model_learned_on', default='lodopab', help='model-checkpoint to load', choices=['lodopab', 'ellipses'])
 parser.add_argument('--method',  default='naive', choices=['naive', 'dps', 'dds'])
+parser.add_argument('--version', default=1, help="version of the model")
+
 parser.add_argument('--add_corrector_step', action='store_true')
 parser.add_argument('--ema', action='store_true')
 parser.add_argument('--num_steps', default=1000)
@@ -22,16 +24,7 @@ parser.add_argument('--eta', default=0.15, help='reg. used for ``dds'' weighting
 parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde'])
 
 def coordinator(args):
-	if args.model_learned_on == "ellipses":
-		load_path = "/localdata/AlexanderDenker/score_based_baseline/DiskEllipses/checkpoints/2023_05_07_11:05"
-
-		with open(os.path.join(load_path, "report.yaml"), "r") as stream:
-			config = yaml.load(stream, Loader=yaml.UnsafeLoader)
-			config.sampling.load_model_from_path = load_path
-
-			print(config.sde.type)
-
-	_, dataconfig = get_standard_configs(args)
+	config, dataconfig = get_standard_configs(args)
 
 	save_root = get_standard_path(args)
 	save_root.mkdir(parents=True, exist_ok=True)
@@ -65,10 +58,6 @@ def coordinator(args):
 
 		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 10, 'sample_num': 1, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
 
-		plt.figure()
-		plt.imshow(filtbackproj[0,0,:,:].cpu().numpy())
-		plt.show()
-
 		sampler = get_standard_adapted_sampler(
 				args=args,
 				config=config,
@@ -78,8 +67,15 @@ def coordinator(args):
 				observation = observation,
 				ray_trafo = ray_trafo
 				)
-			
+		
 		recon = sampler.sample(logg_kwargs=logg_kwargs)
+		
+		print(f'reconstruction of sample {i}'	)
+		psnr = PSNR(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
+		ssim = SSIM(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())	
+		print('PSNR:', psnr)
+		print('SSIM:', ssim)
+		
 		print(recon.shape)
 		fig, (ax1, ax2) = plt.subplots(1,2)
 		ax1.imshow(ground_truth[0,0,:,:].detach().cpu())

@@ -6,8 +6,8 @@ import functools
 from datetime import datetime
 from src import (get_standard_sde, score_model_simple_trainer, get_standard_score, get_standard_configs, get_standard_train_dataset)
 
-#from configs.disk_ellipses_configs import get_config
-from configs.lodopab_vpsde_configs import get_config
+from configs.disk_ellipses_configs import get_config
+#from configs.lodopab_vpsde_configs import get_config
 #from configs.lodopab_configs import get_config
 
 def coordinator():
@@ -15,10 +15,29 @@ def coordinator():
 	config = get_config()
 	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=False, load_model=False)
-	log_dir = '/localdata/AlexanderDenker/score_based_baseline/LoDoPabCT/checkpoints/' + datetime.now().strftime('%Y_%m_%d_%H:%m')
+
+	base_path = "/localdata/AlexanderDenker/score_based_baseline"
+	if config.data.name == 'LoDoPabCT':
+		logdir = os.path.join(base_path, 'LoDoPabCT')
+	elif config.data.name == 'DiskDistributedEllipsesDataset':
+		logdir = os.path.join(base_path, 'DiskEllipses')
+	else:
+		raise NotImplementedError
 
 	if not os.path.exists(log_dir):
 		os.makedirs(log_dir)
+
+	found_version = False 
+	version_num = 1
+	while not found_version:
+		if os.path.isdir(os.path.join(log_dir, "version_{:02d}".format(version_num))):
+			version_num += 1
+		else:
+			found_version = True 
+
+	log_dir = os.path.join(log_dir, "version_{:02d}".format(version_num))
+	os.makedirs(log_dir)
+
 	with open(os.path.join(log_dir,'report.yaml'), 'w') as file:
 		yaml.dump(config, file)
 

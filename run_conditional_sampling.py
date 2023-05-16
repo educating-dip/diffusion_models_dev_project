@@ -12,6 +12,7 @@ from src import (get_standard_sde, PSNR, SSIM, get_standard_dataset, get_data_fr
 parser = argparse.ArgumentParser(description='conditional sampling')
 parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=['walnut', 'lodopab', 'ellipses', 'mayo'])
 parser.add_argument('--model_learned_on', default='lodopab', help='model-checkpoint to load', choices=['lodopab', 'ellipses'])
+parser.add_argument('--version', default=1, help="version of the model")
 parser.add_argument('--method',  default='naive', choices=['naive', 'dps', 'dds'])
 parser.add_argument('--add_corrector_step', action='store_true')
 parser.add_argument('--ema', action='store_true')
@@ -21,18 +22,10 @@ parser.add_argument('--gamma', default=0.01, help='reg. used for ``dds''.')
 parser.add_argument('--eta', default=0.15, help='reg. used for ``dds'' weighting stochastic and deterministic noise.')
 parser.add_argument('--pct_chain_elapsed', default=0,  help='``pct_chain_elapsed'' actives init of chain')
 parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde'])
+parser.add_argument('--cg_iter', default=5)
 
 def coordinator(args):
-	if args.model_learned_on == "ellipses":
-		load_path = "/localdata/AlexanderDenker/score_based_baseline/DiskEllipses/checkpoints/2023_05_11_08:05"
-
-		with open(os.path.join(load_path, "report.yaml"), "r") as stream:
-			config = yaml.load(stream, Loader=yaml.UnsafeLoader)
-			config.sampling.load_model_from_path = load_path
-
-			print(config.sde.type)
-
-	_, dataconfig = get_standard_configs(args)
+	config, dataconfig = get_standard_configs(args)
 	save_root = get_standard_path(args)
 	save_root.mkdir(parents=True, exist_ok=True)
 
@@ -64,7 +57,7 @@ def coordinator(args):
 				white_noise_rel_stddev=dataconfig.data.stddev
 				)
 
-		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 5,
+		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 40,
 			'sample_num':i, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
 		sampler = get_standard_sampler(
 			args=args,
@@ -89,14 +82,17 @@ def coordinator(args):
 		print(	'PSNR:', psnr)
 		print(	'SSIM:', ssim)
 	
-		#fig, (ax1, ax2) = plt.subplots(1,2)
-		#ax1.imshow(ground_truth[0,0,:,:].detach().cpu())
-		#ax1.axis("off")
-		#ax1.set_title("Ground truth")
-		#ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu())
-		#ax2.axis("off")
-		#ax2.set_title("Naive with penalty = " + str(args.penalty))
-		#plt.show() 
+		fig, (ax1, ax2, ax3) = plt.subplots(1,3)
+		ax1.imshow(ground_truth[0,0,:,:].detach().cpu())
+		ax1.axis("off")
+		ax1.set_title("Ground truth")
+		ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu())
+		ax2.axis("off")
+		ax2.set_title(args.method)
+		ax3.imshow(filtbackproj[0,0,:,:].detach().cpu())
+		ax3.axis("off")
+		ax3.set_title("FBP")
+		plt.show() 
 
 
 	report = {}

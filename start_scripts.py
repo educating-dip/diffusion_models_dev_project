@@ -1,6 +1,6 @@
 
 import os 
-cuda_idx = 0
+cuda_idx = 6
 
 
 """
@@ -20,10 +20,17 @@ for penalty in [750., 1000., 2000.]:
 #                        --method=naive --ema --num_steps={num_steps}")
 
 
-for method in ["dds"]:
-    for eta in [0.15, 0.5, 0.85]:
-        for gamma in [0.001, 0.1, 0.5, 0.8, 0.9, 0.99]:
-            for num_steps in [25, 50, 75, 100]:
-                os.system(f"CUDA_VISIBLE_DEVICES={cuda_idx} python run_conditional_sampling.py --model=ellipses \
-                            --dataset=ellipses --eta={eta} --gamma={gamma} \
-                            --method={method} --ema --num_steps={num_steps}")
+#for method in ["dds"]:
+#    for eta in [0.15, 0.5, 0.85]:
+#        for gamma in [0.001, 0.1, 0.5, 0.8, 0.9, 0.99]:
+#            for num_steps in [25, 50, 75, 100]:
+#                os.system(f"CUDA_VISIBLE_DEVICES={cuda_idx} python run_conditional_sampling.py --model=ellipses \
+#                            --dataset=ellipses --eta={eta} --gamma={gamma} \
+#                            --method={method} --ema --num_steps={num_steps}")
+
+for method in ["dps"]:
+    for penalty in [0.005, 0.008, 0.02]:
+        for num_steps in [50, 200, 400]:
+            os.system(f"CUDA_VISIBLE_DEVICES={cuda_idx} python run_conditional_sampling.py --model=ellipses \
+                       --dataset=ellipses --penalty={penalty} \
+                        --method=dps --ema --num_steps={num_steps}")
