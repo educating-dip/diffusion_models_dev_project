@@ -3,13 +3,9 @@ from typing import Optional, Any, Dict, Tuple
 import torch
 import numpy as np
 
-
-from odl.solvers.iterative.iterative import conjugate_gradient
-from odl.operator.default_ops import IdentityOperator
-
-
 from torch import Tensor
 from src.utils.impl_linear_cg import linear_cg
+from src.utils.cg import cg
 from src.utils import SDE, VESDE, VPSDE
 from src.physics import BaseRayTrafo
 from src.third_party_models import OpenAiUNetModel
@@ -66,10 +62,14 @@ def Euler_Maruyama_sde_predictor(
     _s = s
     # if ``penalty == 1/σ2'' and ``aTweedy'' is False : recovers Eq.4 in 1.
     if aTweedy and nloglik is not None: datafitscale = loss.pow(-1)
-    if nloglik is not None: _s = _s - penalty*nloglik_grad*datafitscale # minus for negative log-lik.
+
+    if nloglik is not None and not aTweedy: _s = _s - penalty*nloglik_grad*datafitscale # minus for negative log-lik.
     x_mean = x - (drift - diffusion[:, None, None, None].pow(2)*_s)*step_size
     noise = torch.sqrt(diffusion[:, None, None, None].pow(2)*step_size)*torch.randn_like(x)
     x = x_mean + noise
+    
+    if aTweedy:
+        x = x - penalty*nloglik_grad#*datafitscale
 
     return x.detach(), x_mean.detach()
 
@@ -105,7 +105,6 @@ def Langevin_sde_corrector(
 
 """
 This version of the DDS Sampler uses CG from GPytorch. This seemed to be unstable. 
-The ODL version with exactly the same operator and RHS works just fine. 
 """
 
 """
@@ -200,26 +199,14 @@ def decomposed_diffusion_sampling_sde_predictor(
 
     s = score(x, time_step).detach()
     xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step) # Tweedy denoising step
-     
-    ray_trafo_op = ray_trafo.ray_trafo_op_fun.operator
-    ray_trafo_adjoint_op = ray_trafo.ray_trafo_adjoint_op_fun.operator
-
-
-    rhs = ray_trafo_op.domain.element(rhs[0,0,:,:].cpu().numpy())
-    I = IdentityOperator(ray_trafo_op.domain)
-        
-    # cg step 
-    x_cg = torch.clone(xhat0.detach())
-    x_cg_odl = ray_trafo_op.domain.element(x_cg[0,0,:,:].cpu().numpy())
-
-    rhs = x_cg_odl + gamma*rhs
-    operator = I + gamma*ray_trafo_adjoint_op*ray_trafo_op
-    conjugate_gradient(operator, x_cg_odl, rhs, niter=4)
-
-    x_proj = torch.from_numpy(np.asarray(x_cg_odl)).to(xhat0.device)
-    x_proj = x_proj.unsqueeze(0).unsqueeze(0)
-
-    xhat = x_proj
+    
+    rhs = xhat0 + gamma*rhs # xhat0 + gamma A* y
+    with torch.no_grad():
+        xhat = cg(x=xhat0, 
+                ray_trafo=ray_trafo, 
+                rhs=rhs, 
+                gamma=gamma,
+                n_iter=cg_kwargs["max_iter"])
 
     
     '''
@@ -262,14 +249,15 @@ def adapted_ddim_sde_predictor(
 
     #TODO: set as a function
     # only tune biases which are not in emb_layers
-    for name, param in score.named_parameters():
+    #for name, param in score.named_parameters():
         #param.requires_grad = True
-        param.requires_grad = False
-        #if "bias" in name and not "emb_layers" in name:
-        #    param.requires_grad = True
+    #    param.requires_grad = False
+    #    if "bias" in name and not "emb_layers" in name:
+    #        param.requires_grad = True
     
     for name, param in score.out.named_parameters():
-        param.requires_grad = True
+        if not "emb_layers" in name:
+            param.requires_grad = True
         
     for name, param in score.output_blocks.named_parameters():
         if not "emb_layers" in name:
@@ -277,14 +265,14 @@ def adapted_ddim_sde_predictor(
         
 
     optim = torch.optim.Adam(score.parameters(), lr=3e-4)
-    gamma = 1e-5
+    gamma = 5e-5
     for i in range(10):
         optim.zero_grad()
         s = score(x, time_step)
         xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step)
 
-        loss = torch.mean((ray_trafo(xhat0) - observation)**2)  #+ gamma * tv_loss(xhat0)
-
+        loss = torch.mean((ray_trafo(xhat0) - observation)**2)  + gamma * tv_loss(xhat0)
+        print(loss)
         loss.backward()
         optim.step()
 
@@ -341,6 +329,7 @@ def conj_grad_closure(x: Tensor, ray_trafo: BaseRayTrafo, gamma: float = 1e-5):
 
     batch_size = x.shape[-1]
     x = x.T.reshape(batch_size, 1, *ray_trafo.im_shape)
+    print("shape of x in conj_grad: ", x.shape)
     return (gamma*ray_trafo.trafo_adjoint(ray_trafo(x)) + x).view(batch_size, np.prod(ray_trafo.im_shape)).T
 
 def chain_simple_init(
