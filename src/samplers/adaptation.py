@@ -30,6 +30,8 @@ def adapt_decoder(x: Tensor,
                 lr: float = 3e-4) -> nn.Module:
     
     score.train() 
+    for name, param in score.named_parameters():
+        param.requires_grad = False
 
     for name, param in score.out.named_parameters():
         if not "emb_layers" in name:
@@ -39,6 +41,11 @@ def adapt_decoder(x: Tensor,
         if not "emb_layers" in name:
             param.requires_grad = True
         
+    all_parameters = sum([p.numel() for p in score.parameters()])
+    trainable_parameters = sum([p.numel() for p in score.parameters() if p.requires_grad])
+
+    print("Percent of parameters to re-train: ", trainable_parameters/all_parameters*100., " %")
+
     optim = torch.optim.Adam(score.parameters(), lr=lr)
     for i in range(num_steps):
         optim.zero_grad()
