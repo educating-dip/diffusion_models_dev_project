@@ -10,7 +10,7 @@ from src.utils import SDE, VESDE, VPSDE
 from src.physics import BaseRayTrafo
 from src.third_party_models import OpenAiUNetModel
 
-from .adaptation import adapt_decoder
+from .adaptation import adapt_decoder, full_adapt
 
 def Euler_Maruyama_sde_predictor(
     score: OpenAiUNetModel,
@@ -241,8 +241,6 @@ def adapted_ddim_sde_predictor(
 
     datafitscale = 1. # place-holder
 
-
-
     #TODO: set as a function
     # only tune biases which are not in emb_layers
     #for name, param in score.named_parameters():
@@ -259,7 +257,15 @@ def adapted_ddim_sde_predictor(
                 ray_trafo=ray_trafo,
                 tv_penalty=5e-5, 
                 num_steps=10)
-    
+    elif adaptation == "full":
+        score = full_adapt(x=x, 
+                score=score, 
+                time_step=time_step, 
+                sde=sde,
+                observation=observation,
+                ray_trafo=ray_trafo,
+                tv_penalty=5e-5, 
+                num_steps=10)
 
     with torch.no_grad():
         s = score(x, time_step) # - grad tv(x)

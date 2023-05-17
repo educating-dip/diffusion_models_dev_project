@@ -59,3 +59,37 @@ def adapt_decoder(x: Tensor,
     score.eval()
 
     return score 
+
+
+def full_adapt(x: Tensor, 
+                score: nn.Module, 
+                time_step: Tensor, 
+                sde,
+                observation: Tensor,
+                ray_trafo,
+                tv_penalty: float, 
+                num_steps: int,
+                lr: float = 3e-4) -> nn.Module:
+    
+    score.train() 
+    for name, param in score.named_parameters():
+        param.requires_grad = True
+        
+    all_parameters = sum([p.numel() for p in score.parameters()])
+    trainable_parameters = sum([p.numel() for p in score.parameters() if p.requires_grad])
+
+    print("Percent of parameters to re-train: ", trainable_parameters/all_parameters*100., " %")
+
+    optim = torch.optim.Adam(score.parameters(), lr=lr)
+    for i in range(num_steps):
+        optim.zero_grad()
+        s = score(x, time_step)
+        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step)
+
+        loss = torch.mean((ray_trafo(xhat0) - observation)**2)  + tv_penalty * tv_loss(xhat0)
+        loss.backward()
+        optim.step()
+
+    score.eval()
+
+    return score 
