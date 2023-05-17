@@ -6,6 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import islice
 from itertools import islice
+from PIL import Image
+
 from src import (get_standard_sde, PSNR, SSIM, get_standard_dataset, get_data_from_ground_truth, get_standard_ray_trafo,  
 	get_standard_score, get_standard_sampler, get_standard_configs, get_standard_path) 
 
@@ -25,6 +27,8 @@ parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde'])
 parser.add_argument('--cg_iter', default=5)
 
 def coordinator(args):
+	print(args)
+
 	config, dataconfig = get_standard_configs(args)
 	save_root = get_standard_path(args)
 	save_root.mkdir(parents=True, exist_ok=True)
@@ -36,7 +40,7 @@ def coordinator(args):
 	score = get_standard_score(config=config, sde=sde, use_ema=args.ema)
 	score = score.to(config.device)
 	score.eval()
-
+	
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
 	ray_trafo = ray_trafo.to(device=config.device)
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
@@ -73,14 +77,17 @@ def coordinator(args):
 		recon = sampler.sample(logg_kwargs=logg_kwargs)
 		torch.save(		{'recon': recon.cpu().squeeze(), 'ground_truth': ground_truth.cpu().squeeze()}, 
 			str(save_root / f'recon_{i}_info.pt')	)
-			
-		print(	f'reconstruction of sample {i}'	)
+		
+		im = Image.fromarray(recon.cpu().squeeze().numpy()*255.).convert("L")
+		im.save(str(save_root / f'recon_{i}.png'))
+
+		print(f'reconstruction of sample {i}'	)
 		psnr = PSNR(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
 		ssim = SSIM(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())	
 		psnr_list.append(psnr)
 		ssim_list.append(ssim)
-		print(	'PSNR:', psnr)
-		print(	'SSIM:', ssim)
+		print('PSNR:', psnr)
+		print('SSIM:', ssim)
 	
 		fig, (ax1, ax2, ax3) = plt.subplots(1,3)
 		ax1.imshow(ground_truth[0,0,:,:].detach().cpu())
@@ -96,9 +103,12 @@ def coordinator(args):
 
 
 	report = {}
-	report.update(vars(args))
-	report.update(dict(config.items()))
 	report.update(dict(dataconfig.items()))
+	report.update(dict(config.items()))
+	report.update(vars(args))
+
+	report["PSNR"] = np.mean(psnr_list)
+	report["SSIM"] = np.mean(ssim_list)
 
 	with open(save_root / 'report.yaml', 'w') as file:
 		yaml.dump(report, file)

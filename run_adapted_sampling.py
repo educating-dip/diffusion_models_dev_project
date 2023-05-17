@@ -22,13 +22,13 @@ parser.add_argument('--penalty', default=1, help='reg. penalty used for ``naive'
 parser.add_argument('--gamma', default=0.01, help='reg. used for ``dds''.')
 parser.add_argument('--eta', default=0.15, help='reg. used for ``dds'' weighting stochastic and deterministic noise.')
 parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde'])
+parser.add_argument('--adaptation', default="decoder", choices=["decoder"])
 
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args)
-
 	save_root = get_standard_path(args)
 	save_root.mkdir(parents=True, exist_ok=True)
-
+	
 	if config.seed is not None:
 		torch.manual_seed(config.seed) # for reproducible noise in simulate
 

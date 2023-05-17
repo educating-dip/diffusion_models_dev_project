@@ -10,6 +10,8 @@ from src.utils import SDE, VESDE, VPSDE
 from src.physics import BaseRayTrafo
 from src.third_party_models import OpenAiUNetModel
 
+from .adaptation import adapt_decoder
+
 def Euler_Maruyama_sde_predictor(
     score: OpenAiUNetModel,
     sde: SDE,
@@ -239,13 +241,14 @@ def adapted_ddim_sde_predictor(
     step_size: float,
     ray_trafo, 
     observation, 
+    adaptation: str, 
     datafitscale: Optional[float] = None, # placeholder
     use_simplified_eqn: bool = False
     ) -> Tuple[Tensor, Tensor]:
 
     datafitscale = 1. # place-holder
 
-    score.train() 
+
 
     #TODO: set as a function
     # only tune biases which are not in emb_layers
@@ -253,30 +256,17 @@ def adapted_ddim_sde_predictor(
         #param.requires_grad = True
     #    param.requires_grad = False
     #    if "bias" in name and not "emb_layers" in name:
-    #        param.requires_grad = True
+    #            param.requires_grad = True
+    if adaptation == "decoder":
+        score = adapt_decoder(x=x, 
+                score=score, 
+                time_step=time_step, 
+                sde=sde,
+                observation=observation,
+                ray_trafo=ray_trafo,
+                tv_penalty=5e-5, 
+                num_steps=10)
     
-    for name, param in score.out.named_parameters():
-        if not "emb_layers" in name:
-            param.requires_grad = True
-        
-    for name, param in score.output_blocks.named_parameters():
-        if not "emb_layers" in name:
-            param.requires_grad = True
-        
-
-    optim = torch.optim.Adam(score.parameters(), lr=3e-4)
-    gamma = 5e-5
-    for i in range(10):
-        optim.zero_grad()
-        s = score(x, time_step)
-        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step)
-
-        loss = torch.mean((ray_trafo(xhat0) - observation)**2)  + gamma * tv_loss(xhat0)
-        print(loss)
-        loss.backward()
-        optim.step()
-
-    score.eval()
 
     with torch.no_grad():
         s = score(x, time_step) # - grad tv(x)
@@ -293,7 +283,7 @@ def _ddim_dds(
     time_step: Tensor,
     step_size: Tensor, 
     eta: float, 
-    use_simplified_eqn: bool = False
+    use_simplified_eqn: bool = False #True #False
     ) -> Tensor:
     
     if isinstance(sde, VESDE):
@@ -303,8 +293,8 @@ def _ddim_dds(
             )[:, None, None, None]
         tbeta = 1 - ( std_tminus1.pow(2) * std_t.pow(-2) ) if not use_simplified_eqn else torch.tensor(1.) 
         noise_deterministic = - std_tminus1*std_t*torch.sqrt( 1 - tbeta.pow(2)*eta**2 ) * s
-        noise_stochastic = eta*tbeta*torch.randn_like(xhat)
-        if use_simplified_eqn: noise_stochastic = std_tminus1 * noise_stochastic
+        noise_stochastic =  std_tminus1 * eta*tbeta*torch.randn_like(xhat)
+        #if use_simplified_eqn: noise_stochastic = std_tminus1 * noise_stochastic
     elif isinstance(sde, VPSDE):
         mean_tminus1 = sde.marginal_prob_mean(t=time_step-step_size
             )[:, None, None, None]

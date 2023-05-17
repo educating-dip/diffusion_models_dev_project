@@ -163,7 +163,7 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
             'start_time_step': 0,
             'im_shape': [1, config.data.im_size, config.data.im_size],
             'eps': config.sampling.eps,
-            'predictor': {'eta': float(args.eta), 'use_simplified_eqn': True},
+            'predictor': {'eta': float(args.eta), 'use_simplified_eqn': True, "adaptation": args.adaptation},
             'corrector': {}
             }
 
@@ -300,6 +300,7 @@ def get_standard_configs(args, base_path="/localdata/AlexanderDenker/score_based
     version = "version_{:02d}".format(int(args.version))
     if args.model_learned_on.lower() == 'ellipses': 
         load_path = os.path.join(base_path, "DiskEllipses", args.sde.lower(), version)
+        print("load model from: ", load_path)
 
         with open(os.path.join(load_path, "report.yaml"), "r") as stream:
             config = yaml.load(stream, Loader=yaml.UnsafeLoader)
@@ -307,7 +308,7 @@ def get_standard_configs(args, base_path="/localdata/AlexanderDenker/score_based
 
     elif args.model_learned_on.lower() == 'lodopab':
         load_path = os.path.join(base_path, "LoDoPabCT", args.sde.lower(), version)
-
+        print("load model from: ", load_path)
         with open(os.path.join(load_path, "report.yaml"), "r") as stream:
             config = yaml.load(stream, Loader=yaml.UnsafeLoader)
             config.sampling.load_model_from_path = load_path

@@ -18,11 +18,13 @@ def coordinator():
 
 	base_path = "/localdata/AlexanderDenker/score_based_baseline"
 	if config.data.name == 'LoDoPabCT':
-		logdir = os.path.join(base_path, 'LoDoPabCT')
+		log_dir = os.path.join(base_path, 'LoDoPabCT')
 	elif config.data.name == 'DiskDistributedEllipsesDataset':
-		logdir = os.path.join(base_path, 'DiskEllipses')
+		log_dir = os.path.join(base_path, 'DiskEllipses')
 	else:
 		raise NotImplementedError
+
+	log_dir = os.path.join(log_dir, config.sde.type)
 
 	if not os.path.exists(log_dir):
 		os.makedirs(log_dir)
@@ -36,6 +38,7 @@ def coordinator():
 			found_version = True 
 
 	log_dir = os.path.join(log_dir, "version_{:02d}".format(version_num))
+	print("save model to ", log_dir)
 	os.makedirs(log_dir)
 
 	with open(os.path.join(log_dir,'report.yaml'), 'w') as file:

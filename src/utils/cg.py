@@ -34,7 +34,7 @@ def cg(x: Tensor, ray_trafo: BaseRayTrafo, rhs: Tensor, gamma: float = 0.5, n_it
         r = r - alpha[:, None,None,None]*d # r = r - alpha*d
 
         sqnorm_r_new = torch.linalg.norm(r.reshape(r.shape[0], -1), dim=1)**2 #r.norm() ** 2
-        print(sqnorm_r_new)
+
         beta = sqnorm_r_new / sqnorm_r_old
         sqnorm_r_old = sqnorm_r_new
 
