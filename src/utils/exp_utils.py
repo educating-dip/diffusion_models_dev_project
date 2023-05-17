@@ -163,7 +163,8 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
             'start_time_step': 0,
             'im_shape': [1, config.data.im_size, config.data.im_size],
             'eps': config.sampling.eps,
-            'predictor': {'eta': float(args.eta), 'use_simplified_eqn': True, "adaptation": args.adaptation},
+            'predictor': {'eta': float(args.eta), 'use_simplified_eqn': True, 
+                        "adaptation": args.adaptation, "tv_penalty": float(args.tv_penalty)},
             'corrector': {}
             }
 

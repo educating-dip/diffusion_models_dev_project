@@ -224,20 +224,13 @@ def decomposed_diffusion_sampling_sde_predictor(
 
     return x.detach(), xhat
 
-
-
-def tv_loss(x):
-
-    dh = torch.abs(x[..., :, 1:] - x[..., :, :-1])
-    dw = torch.abs(x[..., 1:, :] - x[..., :-1, :])
-    return torch.sum(dh[..., :-1, :] + dw[..., :, :-1])
-
 def adapted_ddim_sde_predictor( 
     score: OpenAiUNetModel,
     sde: SDE,
     x: Tensor,
     time_step: Tensor,
     eta: float,
+    tv_penalty: float, 
     step_size: float,
     ray_trafo, 
     observation, 
