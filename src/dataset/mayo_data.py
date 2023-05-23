@@ -44,10 +44,11 @@ class MayoDataset(Dataset):
         path = os.path.join(self.base_path, subject, dirs[0], full_dose_image_dirs[0])
         dcm_files = os.listdir(path)
         dcm_files.sort(key=lambda f: float(dcmread(os.path.join(path, f), specific_tags=['SliceLocation'])['SliceLocation'].value))
-        sample_slice = (len(dcm_files) - 1) // 2
+        sample_slice = (len(dcm_files) - 1) // 2 # middle slice 
         dcm_dataset = dcmread(os.path.join(path, dcm_files[sample_slice]))
 
         rng = np.random.default_rng(self.seed)
+        # like lodopab preprocessing
         array = dcm_dataset.pixel_array[75:-75,75:-75].astype(np.float32).T
         array *= dcm_dataset.RescaleSlope
         array += dcm_dataset.RescaleIntercept

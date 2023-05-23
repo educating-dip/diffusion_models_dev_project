@@ -16,8 +16,8 @@ parser.add_argument('--ema', action='store_true')
 parser.add_argument('--num_steps', default=1000)
 
 def coordinator(args):
-	#load_path = "/localdata/AlexanderDenker/score_based_baseline/DiskEllipses/checkpoints/2023_05_07_11:05"
-	load_path = args.load_path
+	load_path = "/localdata/AlexanderDenker/score_based_baseline/LoDoPabCT/vpsde/version_01"
+	#load_path = args.load_path
 
 	with open(os.path.join(load_path, "report.yaml"), "r") as stream:
 		config = yaml.load(stream, Loader=yaml.UnsafeLoader)
@@ -54,7 +54,7 @@ def coordinator(args):
 		device=config.device)
 		
 	x_mean = sampler.sample(logging=False)
-	x_mean = torch.clamp(x_mean, 0)
+	#x_mean = torch.clamp(x_mean, 0)
 	fig, axes = plt.subplots(1,4)
 
 	for idx, ax in enumerate(axes.ravel()):

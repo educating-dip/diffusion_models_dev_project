@@ -255,8 +255,8 @@ def adapted_ddim_sde_predictor(
                 sde=sde,
                 observation=observation,
                 ray_trafo=ray_trafo,
-                tv_penalty=5e-5, 
-                num_steps=10)
+                tv_penalty=tv_penalty, 
+                num_steps=0)
     elif adaptation == "full":
         score = full_adapt(x=x, 
                 score=score, 
@@ -264,7 +264,7 @@ def adapted_ddim_sde_predictor(
                 sde=sde,
                 observation=observation,
                 ray_trafo=ray_trafo,
-                tv_penalty=5e-5, 
+                tv_penalty=tv_penalty, 
                 num_steps=10)
 
     with torch.no_grad():

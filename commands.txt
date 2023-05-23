@@ -1,0 +1,4 @@
+
+CUDA_VISIBLE_DEVICES=7 python run_adapted_sampling.py --model_learned_on=ellipses --dataset=walnut --ema --tv_penalty 1e-4 --sde vesde --version 1 --eta 0.95 --num_steps=50 --method dds --adaptation full
+
+CUDA_VISIBLE_DEVICES=7 python run_adapted_sampling.py --model_learned_on=ellipses --dataset=walnut --ema --tv_penalty 1e-4 --sde vesde --version 1 --eta 0.95 --num_steps=50 --method dds --adaptation decoder
