@@ -15,7 +15,7 @@ from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDat
 from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
 from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, 
     chain_simple_init, decomposed_diffusion_sampling_sde_predictor, 
-    conj_grad_closure, adapted_ddim_sde_predictor)
+    adapted_ddim_sde_predictor, tv_loss, _adapt, _score_model_adpt)
 
 def get_standard_score(config, sde, use_ema, load_model=True):
 
@@ -107,17 +107,17 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             'predictor': {'eta': float(args.eta), 'gamma': float(args.gamma), 'use_simplified_eqn': True, 'ray_trafo': ray_trafo},
             'corrector': {}
             }
-        conj_grad_closure_partial = functools.partial(
-            conj_grad_closure,
-            ray_trafo=ray_trafo, 
-            gamma=sample_kwargs['predictor']['gamma']
-            )
+        # conj_grad_closure_partial = functools.partial(
+        #     conj_grad_closure,
+        #     ray_trafo=ray_trafo, 
+        #     gamma=sample_kwargs['predictor']['gamma']
+        #     )
         predictor = functools.partial(
             decomposed_diffusion_sampling_sde_predictor,
             score=score,
             sde=sde,
             rhs=ray_trafo.trafo_adjoint(observation),
-            conj_grad_closure=conj_grad_closure_partial,
+            # conj_grad_closure=conj_grad_closure_partial,
             cg_kwargs={'max_iter': int(args.cg_iter), 'max_tridiag_iter': None}
         )
     else:
@@ -163,18 +163,32 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
             'start_time_step': 0,
             'im_shape': [1, config.data.im_size, config.data.im_size],
             'eps': config.sampling.eps,
-            'predictor': {'eta': float(args.eta), 'use_simplified_eqn': True, 
-                        "adaptation": args.adaptation, "tv_penalty": float(args.tv_penalty)},
+            'predictor': {
+                'eta': float(args.eta), 
+                'use_simplified_eqn': True, 
+                },
             'corrector': {}
             }
+
+        _score_model_adpt(score, impl=args.adaptation)
+        loss_fn = lambda x: torch.mean(
+            (ray_trafo(x) - observation).pow(2))  + float(args.tv_penalty) * tv_loss(x)
+
+        adapt_fn = functools.partial(
+            _adapt,
+            score=score,
+            sde=sde, 
+            loss_fn=loss_fn,
+            num_steps=10,
+        )
 
         predictor = functools.partial(
             adapted_ddim_sde_predictor,
             score=score,
             sde=sde,
-            observation=observation,
-            ray_trafo=ray_trafo
-        )
+            adapt_fn=adapt_fn,
+            )
+
     else:
         raise NotImplementedError
 
@@ -198,15 +212,14 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
     
     return sampler
 
-
-
-
 def get_standard_ray_trafo(config):
 
     if config.forward_op.trafo_name.lower() == 'simple_trafo':
         ray_trafo = SimpleTrafo(
             im_shape=(config.data.im_size, config.data.im_size), 
-            num_angles=config.forward_op.num_angles)
+            num_angles=config.forward_op.num_angles,
+            impl=config.forward_op.impl
+            )
 
     elif config.forward_op.trafo_name.lower() == 'walnut_trafo':
         ray_trafo = get_walnut_2d_ray_trafo(

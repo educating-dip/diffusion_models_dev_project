@@ -19,6 +19,7 @@ def get_config():
   forward_op = config.forward_op
   forward_op.num_angles = 500
   forward_op.trafo_name = 'simple_trafo'
+  forward_op.impl = 'iradon'
   
   # model
   config.model.attention_resolutions = [16, 32]

@@ -34,11 +34,8 @@ def coordinator(args):
 
 	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=args.ema)
-	
 	score = score.to(config.device)
 	score.eval()
-
-	
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
 	ray_trafo = ray_trafo.to(device=config.device)
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
@@ -57,7 +54,6 @@ def coordinator(args):
 				)
 
 		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 10, 'sample_num': 1, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
-
 		sampler = get_standard_adapted_sampler(
 				args=args,
 				config=config,
@@ -67,16 +63,15 @@ def coordinator(args):
 				observation = observation,
 				ray_trafo = ray_trafo
 				)
-		
 		recon = sampler.sample(logg_kwargs=logg_kwargs)
+		score = get_standard_score(config=config, sde=sde, use_ema=args.ema)
 		
-		print(f'reconstruction of sample {i}'	)
+		print(f'reconstruction of sample {i}')
 		psnr = PSNR(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
 		ssim = SSIM(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())	
 		print('PSNR:', psnr)
 		print('SSIM:', ssim)
 		
-		print(recon.shape)
 		fig, (ax1, ax2) = plt.subplots(1,2)
 		ax1.imshow(ground_truth[0,0,:,:].detach().cpu())
 		ax1.axis("off")

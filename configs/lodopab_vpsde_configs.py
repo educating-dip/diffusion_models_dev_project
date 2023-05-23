@@ -18,7 +18,8 @@ def get_config():
   forward_op = config.forward_op
   forward_op.num_angles = 200
   forward_op.trafo_name = 'simple_trafo'
-
+  forward_op.impl = 'iradon'
+  
   config.sde = sde = ml_collections.ConfigDict()
   sde.type = 'vpsde'
   sde.beta_min = 0.1
