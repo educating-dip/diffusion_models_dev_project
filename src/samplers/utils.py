@@ -133,23 +133,21 @@ def decomposed_diffusion_sampling_sde_predictor(
     Implements the Tweedy denosing step proposed in ``Diffusion Posterior Sampling''.
     '''
     datafitscale = 1. # lace-holder
-
-    s = score(x, time_step).detach()
-    xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step) # Tweedy denoising step
-    rhs = xhat0 + gamma*rhs
     with torch.no_grad():
+        s = score(x, time_step).detach()
+        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step) # Tweedy denoising step
+        rhs = xhat0 + gamma*rhs
         xhat = cg(x=xhat0, ray_trafo=ray_trafo,  rhs=rhs, gamma=gamma, n_iter=cg_kwargs["max_iter"])
-
-    '''
-    It implemets the predictor sampling strategy presented in
-        2. @article{song2020denoising,
-            title={Denoising diffusion implicit models},
-            author={Song, Jiaming and Meng, Chenlin and Ermon, Stefano},
-            journal={arXiv preprint arXiv:2010.02502},
-            year={2020}
-        }, available at https://arxiv.org/pdf/2010.02502.pdf.
-    '''
-    x = _ddim_dds(sde=sde, s=s, xhat=xhat, time_step=time_step, step_size=step_size, eta=eta, use_simplified_eqn=use_simplified_eqn)
+        '''
+        It implemets the predictor sampling strategy presented in
+            2. @article{song2020denoising,
+                title={Denoising diffusion implicit models},
+                author={Song, Jiaming and Meng, Chenlin and Ermon, Stefano},
+                journal={arXiv preprint arXiv:2010.02502},
+                year={2020}
+            }, available at https://arxiv.org/pdf/2010.02502.pdf.
+        '''
+        x = _ddim_dds(sde=sde, s=s, xhat=xhat, time_step=time_step, step_size=step_size, eta=eta, use_simplified_eqn=use_simplified_eqn)
 
     return x.detach(), xhat
 
@@ -269,63 +267,3 @@ def _adapt(
         loss.backward()
         optim.step()
     score.eval()
-
-# def conj_grad_closure(x: Tensor, ray_trafo: BaseRayTrafo, gamma: float = 1e-5):
-#     batch_size = x.shape[-1]
-#     x = x.T.reshape(batch_size, 1, *ray_trafo.im_shape)
-#     print("shape of x in conj_grad: ", x.shape)
-#     return (gamma*ray_trafo.trafo_adjoint(ray_trafo(x)) + x).view(batch_size, np.prod(ray_trafo.im_shape)).T
-
-# def decomposed_diffusion_sampling_sde_predictor( 
-#     score: OpenAiUNetModel,
-#     sde: SDE,
-#     x: Tensor,
-#     rhs: Tensor,
-#     time_step: Tensor,
-#     conj_grad_closure: callable,
-#     eta: float,
-#     gamma: float,
-#     step_size: float,
-#     cg_kwargs: Dict,
-#     datafitscale: Optional[float] = None, # placeholder
-#     use_simplified_eqn: bool = False
-#     ) -> Tuple[Tensor, Tensor]:
-#     '''
-#     It implements ``Decomposed Diffusion Sampling'' for the VE-SDE model 
-#         presented in 
-#             1. @article{chung2023fast,
-#                 title={Fast Diffusion Sampler for Inverse Problems by Geometric Decomposition},
-#                 author={Chung, Hyungjin and Lee, Suhyeon and Ye, Jong Chul},
-#                 journal={arXiv preprint arXiv:2303.05754},
-#                 year={2023}
-#             },
-#     available at https://arxiv.org/pdf/2303.05754.pdf. See Algorithm 4 in Appendix. 
-#     '''
-#     '''
-#     Implements the Tweedy denosing step proposed in ``Diffusion Posterior Sampling''.
-#     '''
-#     datafitscale = 1. # lace-holder
-
-#     s = score(x, time_step).detach()
-#     xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step) # Tweedy denoising step
-#     rhs_flat = rhs.reshape(np.prod(xhat0.shape[2:]), xhat0.shape[0])
-#     initial_guess = xhat0.reshape(np.prod(xhat0.shape[2:]), xhat0.shape[0])
-#     reg_rhs_flat = rhs_flat*gamma + initial_guess
-#     xhat, _= linear_cg(
-#         matmul_closure=conj_grad_closure, 
-#         rhs=reg_rhs_flat, 
-#         initial_guess=initial_guess, 
-#         **cg_kwargs # early-stop CG
-#         )
-#     xhat = xhat.T.view(xhat0.shape[0], 1, *xhat0.shape[2:])
-#     '''
-#     It implemets the predictor sampling strategy presented in
-#         2. @article{song2020denoising,
-#             title={Denoising diffusion implicit models},
-#             author={Song, Jiaming and Meng, Chenlin and Ermon, Stefano},
-#             journal={arXiv preprint arXiv:2010.02502},
-#             year={2020}
-#         }, available at https://arxiv.org/pdf/2010.02502.pdf.
-#     '''
-#     x = _ddim_dds(sde=sde, s=s, xhat=xhat, time_step=time_step, step_size=step_size, eta=eta, use_simplified_eqn=use_simplified_eqn)
-#     return x.detach(), xhat

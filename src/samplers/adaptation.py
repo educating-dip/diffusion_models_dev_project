@@ -1,7 +1,9 @@
+from typing import Optional
 import torch 
 import torch.nn as nn
 from torch import Tensor
 
+from .gp import DKLModel
 from src.utils import SDE
 from src.third_party_models import inject_trainable_lora_extended
 
@@ -15,6 +17,7 @@ def tv_loss(x):
 
 def _score_model_adpt(
     score: nn.Module, 
+    im_size: Optional[int] = None, 
     impl: str = 'full'
     ) -> None:
     
@@ -59,6 +62,9 @@ def _score_model_adpt(
     elif impl == 'dif-fit':
         pass
     elif impl == 'vdkl':
+        score = DKLModel(feats=score, num_dim=im_size**2)
         pass 
     else: 
-        raise NotImplementedError 
+        raise NotImplementedError
+    
+    return score

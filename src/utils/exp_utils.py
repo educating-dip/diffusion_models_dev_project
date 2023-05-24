@@ -15,7 +15,7 @@ from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDat
 from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
 from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, 
     chain_simple_init, decomposed_diffusion_sampling_sde_predictor, 
-    adapted_ddim_sde_predictor, tv_loss, _adapt, _score_model_adpt)
+    adapted_ddim_sde_predictor, tv_loss, _adapt, _score_model_adpt, DKLModel)
 
 def get_standard_score(config, sde, use_ema, load_model=True):
 
@@ -170,25 +170,27 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
             'corrector': {}
             }
 
-        _score_model_adpt(score, impl=args.adaptation)
-
+        score = _score_model_adpt(score, im_size=config.data.im_size, impl=args.adaptation)
         loss_fn = lambda x: torch.mean(
             (ray_trafo(x) - observation).pow(2))  + float(args.tv_penalty) * tv_loss(x)
+        
+        # if args.adaptation == 'vdkl': 
+        #     likelihood = gpytorch.likelihoods.GaussianLikelihood().to(device=device)
 
         adapt_fn = functools.partial(
-            _adapt,
-            score=score,
-            sde=sde, 
-            loss_fn=loss_fn,
-            num_steps=2
+        _adapt,
+        score=score,
+        sde=sde, 
+        loss_fn=loss_fn,
+        num_steps=10,
         )
 
         predictor = functools.partial(
-            adapted_ddim_sde_predictor,
-            score=score,
-            sde=sde,
-            adapt_fn=adapt_fn,
-            )
+        adapted_ddim_sde_predictor,
+        score=score,
+        sde=sde,
+        adapt_fn=adapt_fn,
+        )
 
     else:
         raise NotImplementedError
