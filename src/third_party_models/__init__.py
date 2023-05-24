@@ -1,1 +1,2 @@
 from .openai_unet import OpenAiUNetModel
+from .lora_diffusion import inject_trainable_lora_extended

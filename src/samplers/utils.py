@@ -199,12 +199,20 @@ def _ddim_dds(
         #if use_simplified_eqn: noise_stochastic = std_tminus1 * noise_stochastic
     elif isinstance(sde, VPSDE):
         mean_tminus1 = sde.marginal_prob_mean(t=time_step-step_size
-            )[:, None, None, None]
+            )[:, None, None, None] # sqrt(alpha_t)
         mean_t = sde.marginal_prob_mean(t=time_step
+            )[:, None, None, None] # sqrt(alpha_t-1)
+        std_t = sde.marginal_prob_std(t=time_step
             )[:, None, None, None]
         tbeta = ((1 - mean_tminus1.pow(2)) / ( 1 - mean_t.pow(2) ) ).pow(.5) * (1 - mean_t.pow(2) * mean_tminus1.pow(-2) ).pow(.5) 
+        if tbeta.isnan():
+            tbeta = torch.tensor(0)
         xhat = xhat*mean_tminus1
-        noise_deterministic = torch.sqrt( 1 - mean_tminus1.pow(2) - tbeta.pow(2)*eta**2 )*s
+        print(tbeta)
+        # the DDIM sampling is given using a different parametrization of the score
+        e = - std_t * s # s = - z/std_t
+        
+        noise_deterministic = torch.sqrt( 1 - mean_tminus1.pow(2) - tbeta.pow(2)*eta**2 )*e
         noise_stochastic = eta*tbeta*torch.randn_like(xhat)
     else:
         raise NotImplementedError
@@ -231,6 +239,8 @@ def chain_simple_init(
     std = sde.marginal_prob_std(t)[:, None, None, None]
     return filtbackproj + torch.randn(batch_size, *im_shape, device=device) * std
 
+import itertools 
+
 def _adapt(
     x: Tensor, 
     score: nn.Module, 
@@ -238,11 +248,19 @@ def _adapt(
     loss_fn: callable,
     time_step: Tensor, 
     num_steps: int,
-    lr: float = 3e-4
+    lr: float = 1e-3#3e-4
     ) -> None:
     
-    score.train()
+    #score.train()
+    score.eval() 
+    
     optim = torch.optim.Adam(score.parameters(), lr=lr)
+    
+    new_num_params = sum([p.numel() for p in score.parameters()])
+    trainable_params = sum([p.numel() for p in score.parameters() if p.requires_grad])
+
+    print("Percent of trainable params: ", trainable_params/new_num_params*100, " %")
+
     for i in range(num_steps):
         optim.zero_grad()
         s = score(x, time_step)

@@ -11,7 +11,10 @@ Features restriction to a z-slice of the volume.
 import os
 from math import ceil
 import numpy as np
-import astra
+try:
+    import astra
+except ModuleNotFoundError:
+    print("astra could not be loaded")
 import imageio
 import torch
 import scipy.sparse

@@ -22,7 +22,7 @@ parser.add_argument('--penalty', default=1, help='reg. penalty used for ``naive'
 parser.add_argument('--tv_penalty', default=0.01, help='reg. used for ``adapatation''.')
 parser.add_argument('--eta', default=0.15, help='reg. used for ``dds'' weighting stochastic and deterministic noise.')
 parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde'])
-parser.add_argument('--adaptation', default="decoder", choices=["decoder", "full"])
+parser.add_argument('--adaptation', default="decoder", choices=["decoder", "full", "lora"])
 
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args)

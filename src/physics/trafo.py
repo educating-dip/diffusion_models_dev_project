@@ -5,7 +5,10 @@ from torch import Tensor
 from odl import uniform_discr
 from odl.contrib.torch import OperatorModule
 from odl.discr import uniform_partition
-from torch_radon import Radon
+try:
+	from torch_radon import Radon
+except ModuleNotFoundError:
+	pass 
 from .base_ray_trafo import BaseRayTrafo
 from .utils import filter_sinogram
 

@@ -171,6 +171,7 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
             }
 
         _score_model_adpt(score, impl=args.adaptation)
+
         loss_fn = lambda x: torch.mean(
             (ray_trafo(x) - observation).pow(2))  + float(args.tv_penalty) * tv_loss(x)
 
@@ -179,7 +180,7 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
             score=score,
             sde=sde, 
             loss_fn=loss_fn,
-            num_steps=10,
+            num_steps=2
         )
 
         predictor = functools.partial(

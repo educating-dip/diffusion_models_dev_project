@@ -1,8 +1,11 @@
 import torch 
-import torch_radon
+try:
+    import torch_radon
+    from torch_radon.utils import _normalize_shape, _unnormalize_shape
+except ModuleNotFoundError:
+    pass 
 import numpy as np
 import torch.nn.functional as F
-from torch_radon.utils import _normalize_shape, _unnormalize_shape
 
 
 def filter_sinogram(sinogram, filter_name="ramp"):

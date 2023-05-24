@@ -88,7 +88,7 @@ def coordinator(args):
 		ssim_list.append(ssim)
 		print('PSNR:', psnr)
 		print('SSIM:', ssim)
-		"""
+		
 		fig, (ax1, ax2, ax3) = plt.subplots(1,3)
 		ax1.imshow(ground_truth[0,0,:,:].detach().cpu())
 		ax1.axis("off")
@@ -100,8 +100,7 @@ def coordinator(args):
 		ax3.axis("off")
 		ax3.set_title("FBP")
 		plt.show() 
-		"""
-
+		
 	report = {}
 	report.update(dict(dataconfig.items()))
 	report.update(dict(config.items()))
