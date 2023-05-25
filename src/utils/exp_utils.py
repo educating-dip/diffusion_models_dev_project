@@ -8,14 +8,13 @@ import yaml
 
 from .sde import VESDE, VPSDE
 from .ema import ExponentialMovingAverage
-
+# from .losses import loss_fn
 from ..third_party_models import OpenAiUNetModel
 from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDataset, 
     get_disk_dist_ellipses_dataset, get_walnut_data)
 from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
 from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, 
-    chain_simple_init, decomposed_diffusion_sampling_sde_predictor, 
-    adapted_ddim_sde_predictor, tv_loss, _adapt, _score_model_adpt, DKLModel)
+    chain_simple_init, decomposed_diffusion_sampling_sde_predictor, adapted_ddim_sde_predictor, tv_loss, _adapt, _score_model_adpt)
 
 def get_standard_score(config, sde, use_ema, load_model=True):
 
@@ -56,14 +55,14 @@ def get_standard_sde(config):
 
     if config.sde.type.lower() == 'vesde':
         sde = VESDE(
-            sigma_min=config.sde.sigma_min, 
-            sigma_max=config.sde.sigma_max
-            )
+        sigma_min=config.sde.sigma_min, 
+        sigma_max=config.sde.sigma_max
+        )
     elif config.sde.type.lower() == 'vpsde':
         sde = VPSDE(
-            beta_min=config.sde.beta_min, 
-            beta_max=config.sde.beta_max
-            )
+        beta_min=config.sde.beta_min, 
+        beta_max=config.sde.beta_max
+        )
     else:
         raise NotImplementedError
 
@@ -107,18 +106,12 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
             'predictor': {'eta': float(args.eta), 'gamma': float(args.gamma), 'use_simplified_eqn': True, 'ray_trafo': ray_trafo},
             'corrector': {}
             }
-        # conj_grad_closure_partial = functools.partial(
-        #     conj_grad_closure,
-        #     ray_trafo=ray_trafo, 
-        #     gamma=sample_kwargs['predictor']['gamma']
-        #     )
         predictor = functools.partial(
             decomposed_diffusion_sampling_sde_predictor,
             score=score,
             sde=sde,
             rhs=ray_trafo.trafo_adjoint(observation),
-            # conj_grad_closure=conj_grad_closure_partial,
-            cg_kwargs={'max_iter': int(args.cg_iter), 'max_tridiag_iter': None}
+            cg_kwargs={'max_iter': int(args.cg_iter)}
         )
     else:
         raise NotImplementedError
@@ -141,9 +134,8 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
         batch_size=sample_kwargs['batch_size'],
         device=device
         )
-
     sampler = BaseSampler(
-        score=score, 
+        score=score,
         sde=sde,
         predictor=predictor,         
         corrector=corrector,
@@ -161,8 +153,9 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
             'num_steps': int(args.num_steps),
             'batch_size': config.sampling.batch_size,
             'start_time_step': 0,
-            'im_shape': [1, config.data.im_size, config.data.im_size],
+            'im_shape': [1, *ray_trafo.im_shape],
             'eps': config.sampling.eps,
+            'adapt_freq': int(args.adapt_freq), 
             'predictor': {
                 'eta': float(args.eta), 
                 'use_simplified_eqn': True, 
@@ -170,28 +163,14 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
             'corrector': {}
             }
 
-        score = _score_model_adpt(score, im_size=config.data.im_size, impl=args.adaptation)
-        loss_fn = lambda x: torch.mean(
+        score = _score_model_adpt(score, impl=args.adaptation)
+        # score_matching_loss = functools.partial(loss_fn, model=score, sde=sde)
+        lloss_fn = lambda x: torch.mean(
             (ray_trafo(x) - observation).pow(2))  + float(args.tv_penalty) * tv_loss(x)
-        
-        # if args.adaptation == 'vdkl': 
-        #     likelihood = gpytorch.likelihoods.GaussianLikelihood().to(device=device)
-
         adapt_fn = functools.partial(
-        _adapt,
-        score=score,
-        sde=sde, 
-        loss_fn=loss_fn,
-        num_steps=10,
-        )
-
+            _adapt, score=score, sde=sde, loss_fn=lloss_fn, num_steps=int(args.num_optim_step))
         predictor = functools.partial(
-        adapted_ddim_sde_predictor,
-        score=score,
-        sde=sde,
-        adapt_fn=adapt_fn,
-        )
-
+            adapted_ddim_sde_predictor, score=score, sde=sde, adapt_fn=adapt_fn)
     else:
         raise NotImplementedError
 
@@ -202,7 +181,6 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
         sample_kwargs['corrector']['penalty'] = float(args.penalty)
 
     init_chain_fn = None
-    
     sampler = BaseSampler(
         score=score, 
         sde=sde,

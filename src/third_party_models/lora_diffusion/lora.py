@@ -9,7 +9,7 @@ import torch.nn as nn
 from typing import Callable, Dict, List, Optional, Set, Tuple, Type, Union
 import itertools
 
-UNET_EXTENDED_TARGET_REPLACE = {"ResBlock", "AttentionBlock"}
+UNET_EXTENDED_TARGET_REPLACE = {"AttentionBlock", "ResBlock"} 
 
 class LoraInjectedLinear(nn.Module):
     def __init__(
@@ -223,10 +223,6 @@ class LoraInjectedConv1d(nn.Module):
             self.lora_up.weight.device
         ).to(self.lora_up.weight.dtype)
 
-
-
-
-
 def _find_modules_v2(
     model,
     ancestor_class: Optional[Set[str]] = None,
@@ -276,8 +272,6 @@ def _find_modules_v2(
 
 _find_modules = _find_modules_v2
 
-
-
 def inject_trainable_lora_extended(
     model: nn.Module,
     target_replace_module: Set[str] = UNET_EXTENDED_TARGET_REPLACE,
@@ -295,8 +289,9 @@ def inject_trainable_lora_extended(
         loras = torch.load(loras)
 
     for _module, name, _child_module in _find_modules(
-        model, target_replace_module, search_class=[nn.Conv1d, nn.Conv2d] # nn.Linear, 
+        model, target_replace_module, search_class=[nn.Conv1d, nn.Conv2d]
     ):
+        # breakpoint()
         if _child_module.__class__ == nn.Linear:
             weight = _child_module.weight
             bias = _child_module.bias

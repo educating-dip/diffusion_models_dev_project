@@ -1,6 +1,6 @@
 import torch 
 
-def loss_fn(model, x, sde, eps=1e-5):
+def loss_fn(x, model, sde, eps=1e-5):
 
     """
     The loss function for training score-based generative models.

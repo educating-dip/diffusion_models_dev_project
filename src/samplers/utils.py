@@ -1,14 +1,10 @@
 from typing import Optional, Any, Dict, Tuple
-
 import torch
 import numpy as np
 import torch.nn as nn
-
 from torch import Tensor
-from src.utils.impl_linear_cg import linear_cg
 from src.utils.cg import cg
 from src.utils import SDE, VESDE, VPSDE
-from src.physics import BaseRayTrafo
 from src.third_party_models import OpenAiUNetModel
 
 def Euler_Maruyama_sde_predictor(
@@ -137,7 +133,7 @@ def decomposed_diffusion_sampling_sde_predictor(
         s = score(x, time_step).detach()
         xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step) # Tweedy denoising step
         rhs = xhat0 + gamma*rhs
-        xhat = cg(x=xhat0, ray_trafo=ray_trafo,  rhs=rhs, gamma=gamma, n_iter=cg_kwargs["max_iter"])
+        xhat = cg(x=xhat0, ray_trafo=ray_trafo,  rhs=rhs, gamma=gamma, n_iter=cg_kwargs['max_iter'])
         '''
         It implemets the predictor sampling strategy presented in
             2. @article{song2020denoising,
@@ -151,6 +147,26 @@ def decomposed_diffusion_sampling_sde_predictor(
 
     return x.detach(), xhat
 
+def _adapt(
+    x: Tensor, 
+    score: nn.Module, 
+    sde: SDE,
+    loss_fn: callable,
+    time_step: Tensor, 
+    num_steps: int,
+    lr: float = 1e-3
+    ) -> None:
+    
+    score.eval()
+    optim = torch.optim.Adam(score.parameters(), lr=lr)
+    for i in range(num_steps):
+        optim.zero_grad()
+        s = score(x, time_step)
+        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step)
+        loss = loss_fn(x=xhat0)
+        loss.backward()
+        optim.step()
+
 def adapted_ddim_sde_predictor( 
     score: OpenAiUNetModel,
     sde: SDE,
@@ -158,22 +174,20 @@ def adapted_ddim_sde_predictor(
     time_step: Tensor,
     eta: float,
     step_size: float,
-    adapt_fn: callable, 
+    adapt_fn: callable,
+    use_adapt: bool = False,
     datafitscale: Optional[float] = None, # placeholder
-    use_simplified_eqn: bool = False
+    use_simplified_eqn: bool = False,
     ) -> Tuple[Tensor, Tensor]:
 
     datafitscale = 1. # place-holder
-    adapt_fn(
-    x=x,
-    time_step=time_step, 
-    )
+    if use_adapt : adapt_fn(x=x, time_step=time_step)
     with torch.no_grad():
         s = score(x, time_step)
         xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step) # Tweedy denoising step
 
     x = _ddim_dds(sde=sde, s=s, xhat=xhat0, time_step=time_step, step_size=step_size, eta=eta, use_simplified_eqn=use_simplified_eqn)
-
+    
     return x.detach(), xhat0
 
 def _ddim_dds(
@@ -183,7 +197,7 @@ def _ddim_dds(
     time_step: Tensor,
     step_size: Tensor, 
     eta: float, 
-    use_simplified_eqn: bool = False #True #False
+    use_simplified_eqn: bool = False
     ) -> Tensor:
     
     if isinstance(sde, VESDE):
@@ -194,7 +208,6 @@ def _ddim_dds(
         tbeta = 1 - ( std_tminus1.pow(2) * std_t.pow(-2) ) if not use_simplified_eqn else torch.tensor(1.) 
         noise_deterministic = - std_tminus1*std_t*torch.sqrt( 1 - tbeta.pow(2)*eta**2 ) * s
         noise_stochastic =  std_tminus1 * eta*tbeta*torch.randn_like(xhat)
-        #if use_simplified_eqn: noise_stochastic = std_tminus1 * noise_stochastic
     elif isinstance(sde, VPSDE):
         mean_tminus1 = sde.marginal_prob_mean(t=time_step-step_size
             )[:, None, None, None] # sqrt(alpha_t)
@@ -206,10 +219,8 @@ def _ddim_dds(
         if tbeta.isnan():
             tbeta = torch.tensor(0)
         xhat = xhat*mean_tminus1
-        print(tbeta)
         # the DDIM sampling is given using a different parametrization of the score
         e = - std_t * s # s = - z/std_t
-        
         noise_deterministic = torch.sqrt( 1 - mean_tminus1.pow(2) - tbeta.pow(2)*eta**2 )*e
         noise_stochastic = eta*tbeta*torch.randn_like(xhat)
     else:
@@ -237,33 +248,3 @@ def chain_simple_init(
     std = sde.marginal_prob_std(t)[:, None, None, None]
     return filtbackproj + torch.randn(batch_size, *im_shape, device=device) * std
 
-import itertools 
-
-def _adapt(
-    x: Tensor, 
-    score: nn.Module, 
-    sde: SDE,
-    loss_fn: callable,
-    time_step: Tensor, 
-    num_steps: int,
-    lr: float = 1e-3#3e-4
-    ) -> None:
-    
-    #score.train()
-    score.eval() 
-    
-    optim = torch.optim.Adam(score.parameters(), lr=lr)
-    
-    new_num_params = sum([p.numel() for p in score.parameters()])
-    trainable_params = sum([p.numel() for p in score.parameters() if p.requires_grad])
-
-    print("Percent of trainable params: ", trainable_params/new_num_params*100, " %")
-
-    for i in range(num_steps):
-        optim.zero_grad()
-        s = score(x, time_step)
-        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step)
-        loss = loss_fn(x=xhat0)
-        loss.backward()
-        optim.step()
-    score.eval()

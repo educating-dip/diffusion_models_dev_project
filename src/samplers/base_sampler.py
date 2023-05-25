@@ -66,6 +66,15 @@ class BaseSampler:
         x = init_x
         for i in tqdm(range(self.sample_kwargs['start_time_step'], self.sample_kwargs['num_steps'])):     
             time_step = torch.ones(self.sample_kwargs['batch_size'], device=self.device) * time_steps[i]
+            
+            if self.sample_kwargs.get('adapt_freq', None) is not None:  
+                self.sample_kwargs['predictor'].update(
+                        {'use_adapt': False}
+                    )
+                if i % self.sample_kwargs['adapt_freq'] == 0: 
+                    self.sample_kwargs['predictor'].update(
+                        {'use_adapt': True}
+                    )
 
             x, x_mean = self.predictor(
                 score=self.score,

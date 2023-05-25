@@ -23,6 +23,8 @@ parser.add_argument('--tv_penalty', default=0.01, help='reg. used for ``adapatat
 parser.add_argument('--eta', default=0.15, help='reg. used for ``dds'' weighting stochastic and deterministic noise.')
 parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde'])
 parser.add_argument('--adaptation', default='decoder', choices=['decoder', 'full', 'vdkl', 'lora'])
+parser.add_argument('--num_optim_step', default=10, help='num. of optimization steps taken per sampl. step')
+parser.add_argument('--adapt_freq', default=1, help='freq. of adaptation step in sampl.')
 
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args)
@@ -65,6 +67,8 @@ def coordinator(args):
 				)
 		recon = sampler.sample(logg_kwargs=logg_kwargs)
 		score = get_standard_score(config=config, sde=sde, use_ema=args.ema)
+		score = score.to(config.device)
+
 		
 		print(f'reconstruction of sample {i}')
 		psnr = PSNR(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())

@@ -1,13 +1,6 @@
-from typing import Optional
 import torch 
 import torch.nn as nn
-from torch import Tensor
-
-from .gp import DKLModel
-from src.utils import SDE
 from src.third_party_models import inject_trainable_lora_extended
-
-import itertools
 
 def tv_loss(x):
 
@@ -17,13 +10,12 @@ def tv_loss(x):
 
 def _score_model_adpt(
     score: nn.Module, 
-    im_size: Optional[int] = None, 
-    impl: str = 'full'
-    ) -> None:
+    impl: str = 'full', 
+    verbose: bool = True
+    ) -> nn.Module:
     
     for name, param in score.named_parameters():
         param.requires_grad = False
-
     if impl == 'full':
         for name, param in score.named_parameters():
             param.requires_grad = True
@@ -37,34 +29,23 @@ def _score_model_adpt(
     elif impl == 'lora':
         """ 
         Implement LoRA: https://arxiv.org/pdf/2106.09685.pdf 
-
         Adding LoRA modules to nn.Conv1d, nn.Conv2d (should we also add to nn.Linear?)
          + retraining all biases (only a negligible number of parameters)
         """
-
-
         score.requires_grad_(False)
-
         for name, param in score.named_parameters():
             if "bias" in name and not "emb_layers" in name:
                 param.requires_grad = True
-
-        lora_params, train_names = inject_trainable_lora_extended(score) 
-
-        new_num_params = sum([p.numel() for p in score.parameters()])
-        trainable_params = sum([p.numel() for p in score.parameters() if p.requires_grad])
-
-        #print("Percent of trainable params: ", trainable_params/new_num_params*100, " %")
-        #optim = torch.optim.Adam(itertools.chain(*lora_params), lr=1e-4)
-        #optim = torch.optim.Adam(score.parameters(), lr=3e-4)
-        #return optim
-
+        inject_trainable_lora_extended(score)
     elif impl == 'dif-fit':
         pass
-    elif impl == 'vdkl':
-        score = DKLModel(feats=score, num_dim=im_size**2)
-        pass 
     else: 
         raise NotImplementedError
+
+    if impl in ['lora', 'full', 'decoder'] and verbose:
+        num_params = sum([p.numel() for p in score.parameters()])
+        trainable_params = sum([p.numel() for p in score.parameters() if p.requires_grad])
+        print(f'% of trainable params: {trainable_params/num_params*100}')
+
     
     return score
