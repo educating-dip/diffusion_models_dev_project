@@ -2,13 +2,12 @@ import os
 import time
 import torch
 import functools
+import yaml
+
 from math import ceil
 from pathlib import Path
-import yaml 
-
 from .sde import VESDE, VPSDE
 from .ema import ExponentialMovingAverage
-# from .losses import loss_fn
 from ..third_party_models import OpenAiUNetModel
 from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDataset, 
     get_disk_dist_ellipses_dataset, get_walnut_data)
@@ -162,9 +161,13 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
                 },
             'corrector': {}
             }
-
-        score = _score_model_adpt(score, impl=args.adaptation)
-        # score_matching_loss = functools.partial(loss_fn, model=score, sde=sde)
+        adpt_kwargs = None
+        if args.adaptation == 'lora':
+            adpt_kwargs = {
+            'include_blocks': args.lora_include_blocks, 
+            'r': args.lora_rank
+            }
+        _score_model_adpt(score, impl=args.adaptation, adpt_kwargs=adpt_kwargs)
         lloss_fn = lambda x: torch.mean(
             (ray_trafo(x) - observation).pow(2))  + float(args.tv_penalty) * tv_loss(x)
         adapt_fn = functools.partial(

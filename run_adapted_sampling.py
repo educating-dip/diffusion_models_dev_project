@@ -25,6 +25,8 @@ parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde'])
 parser.add_argument('--adaptation', default='decoder', choices=['decoder', 'full', 'vdkl', 'lora'])
 parser.add_argument('--num_optim_step', default=10, help='num. of optimization steps taken per sampl. step')
 parser.add_argument('--adapt_freq', default=1, help='freq. of adaptation step in sampl.')
+parser.add_argument('--lora_include_blocks', default=['input_blocks','middle_block','output_blocks','out'], nargs='+', help='lora kwargs impl. of arch. blocks included')
+parser.add_argument('--lora_rank', default=4, help='lora kwargs impl. of rank')
 
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args)

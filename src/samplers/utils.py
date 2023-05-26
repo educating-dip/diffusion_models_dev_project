@@ -1,7 +1,9 @@
 from typing import Optional, Any, Dict, Tuple
+
 import torch
 import numpy as np
 import torch.nn as nn
+
 from torch import Tensor
 from src.utils.cg import cg
 from src.utils import SDE, VESDE, VPSDE
@@ -66,7 +68,7 @@ def Euler_Maruyama_sde_predictor(
     x = x_mean + noise
     
     if aTweedy:
-        x = x - penalty*nloglik_grad#*datafitscale
+        x = x - penalty*nloglik_grad
 
     return x.detach(), x_mean.detach()
 
@@ -210,9 +212,9 @@ def _ddim_dds(
         noise_stochastic =  std_tminus1 * eta*tbeta*torch.randn_like(xhat)
     elif isinstance(sde, VPSDE):
         mean_tminus1 = sde.marginal_prob_mean(t=time_step-step_size
-            )[:, None, None, None] # sqrt(alpha_t)
+            )[:, None, None, None]
         mean_t = sde.marginal_prob_mean(t=time_step
-            )[:, None, None, None] # sqrt(alpha_t-1)
+            )[:, None, None, None]
         std_t = sde.marginal_prob_std(t=time_step
             )[:, None, None, None]
         tbeta = ((1 - mean_tminus1.pow(2)) / ( 1 - mean_t.pow(2) ) ).pow(.5) * (1 - mean_t.pow(2) * mean_tminus1.pow(-2) ).pow(.5) 
@@ -236,10 +238,10 @@ def _aTweedy(s: Tensor, x: Tensor, sde: SDE, time_step:Tensor) -> Tensor:
 
 def chain_simple_init(
     time_steps: Tensor,
-    sde: SDE, 
+    sde: SDE,
     filtbackproj: Tensor, 
-    start_time_step: int, 
-    im_shape: Tuple[int, int], 
+    start_time_step: int,
+    im_shape: Tuple[int, int],
     batch_size: int, 
     device: Any
     ) -> Tensor:

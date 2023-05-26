@@ -1,3 +1,5 @@
+from typing import Optional, Dict
+
 import torch 
 import torch.nn as nn
 from src.third_party_models import inject_trainable_lora_extended
@@ -11,6 +13,7 @@ def tv_loss(x):
 def _score_model_adpt(
     score: nn.Module, 
     impl: str = 'full', 
+    adpt_kwargs: Optional[Dict] = None,
     verbose: bool = True
     ) -> nn.Module:
     
@@ -36,7 +39,8 @@ def _score_model_adpt(
         for name, param in score.named_parameters():
             if "bias" in name and not "emb_layers" in name:
                 param.requires_grad = True
-        inject_trainable_lora_extended(score)
+        inject_trainable_lora_extended(score, **adpt_kwargs)
+
     elif impl == 'dif-fit':
         pass
     else: 
@@ -46,6 +50,3 @@ def _score_model_adpt(
         num_params = sum([p.numel() for p in score.parameters()])
         trainable_params = sum([p.numel() for p in score.parameters() if p.requires_grad])
         print(f'% of trainable params: {trainable_params/num_params*100}')
-
-    
-    return score
