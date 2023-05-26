@@ -1,20 +1,18 @@
 ''' 
 Inspired to https://github.com/yang-song/score_sde_pytorch/blob/main/sampling.py 
 '''
-from typing import Optional, Any, Dict, Tuple
+from typing import Optional, Any, Dict
 
 import os
 import torchvision
 import numpy as np
 import torch
-import datetime
 
 from tqdm import tqdm
 from torch import Tensor
 from torch.utils.tensorboard import SummaryWriter
 
 from ..utils import SDE, PSNR
-from ..physics import BaseRayTrafo
 from ..third_party_models import OpenAiUNetModel
 
 class BaseSampler:
@@ -42,13 +40,10 @@ class BaseSampler:
         ) -> Tensor:
         if logging:
             writer = SummaryWriter(log_dir=os.path.join(logg_kwargs['log_dir'], str(logg_kwargs['sample_num'])))
-            log_interval = (self.sample_kwargs['num_steps'] - self.sample_kwargs['start_time_step']) / logg_kwargs['num_img_in_log']
-        
         time_steps = np.linspace(1., self.sample_kwargs['eps'], self.sample_kwargs['num_steps'])
 
         step_size = time_steps[0] - time_steps[1]
         if self.sample_kwargs['start_time_step'] == 0:
-            t = torch.ones(self.sample_kwargs['batch_size'], device=self.device)
             init_x = self.sde.prior_sampling([self.sample_kwargs['batch_size'], *self.sample_kwargs['im_shape']]).to(self.device)
         else:
             init_x = self.init_chain_fn(time_steps=time_steps)

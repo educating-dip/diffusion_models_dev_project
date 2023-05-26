@@ -3,6 +3,7 @@ from typing import Optional, Any, Dict, Tuple
 import torch
 import numpy as np
 import torch.nn as nn
+import warnings 
 
 from torch import Tensor
 from src.utils.cg import cg
@@ -74,7 +75,7 @@ def Euler_Maruyama_sde_predictor(
 
 def Langevin_sde_corrector(
     score: OpenAiUNetModel,
-    sde: SDE,
+    sde: SDE, # pylint: disable=unused-variable
     x: Tensor,
     time_step: Tensor,
     nloglik: Optional[callable] = None,
@@ -111,7 +112,7 @@ def decomposed_diffusion_sampling_sde_predictor(
     gamma: float,
     step_size: float,
     cg_kwargs: Dict,
-    datafitscale: Optional[float] = None, # placeholder
+    datafitscale: Optional[float] = None, # pylint: disable=unused-variable
     use_simplified_eqn: bool = False,
     ray_trafo: callable = None
     ) -> Tuple[Tensor, Tensor]:
@@ -130,7 +131,7 @@ def decomposed_diffusion_sampling_sde_predictor(
     '''
     Implements the Tweedy denosing step proposed in ``Diffusion Posterior Sampling''.
     '''
-    datafitscale = 1. # lace-holder
+
     with torch.no_grad():
         s = score(x, time_step).detach()
         xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step) # Tweedy denoising step
@@ -161,7 +162,7 @@ def _adapt(
     
     score.eval()
     optim = torch.optim.Adam(score.parameters(), lr=lr)
-    for i in range(num_steps):
+    for _ in range(num_steps):
         optim.zero_grad()
         s = score(x, time_step)
         xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step)
@@ -178,15 +179,14 @@ def adapted_ddim_sde_predictor(
     step_size: float,
     adapt_fn: callable,
     use_adapt: bool = False,
-    datafitscale: Optional[float] = None, # placeholder
+    datafitscale: Optional[float] = None, # pylint: disable=unused-variable
     use_simplified_eqn: bool = False,
     ) -> Tuple[Tensor, Tensor]:
 
-    datafitscale = 1. # place-holder
     if use_adapt : adapt_fn(x=x, time_step=time_step)
     with torch.no_grad():
         s = score(x, time_step)
-        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step) # Tweedy denoising step
+        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step)
 
     x = _ddim_dds(sde=sde, s=s, xhat=xhat0, time_step=time_step, step_size=step_size, eta=eta, use_simplified_eqn=use_simplified_eqn)
     
@@ -219,7 +219,9 @@ def _ddim_dds(
             )[:, None, None, None]
         tbeta = ((1 - mean_tminus1.pow(2)) / ( 1 - mean_t.pow(2) ) ).pow(.5) * (1 - mean_t.pow(2) * mean_tminus1.pow(-2) ).pow(.5) 
         if tbeta.isnan():
+            warnings.warn(' ``tbeta'' isn ``nan'' default = 0. Note that ``tbeta'' is expected to be ``Nan'' in the last step.')
             tbeta = torch.tensor(0)
+
         xhat = xhat*mean_tminus1
         # the DDIM sampling is given using a different parametrization of the score
         e = - std_t * s # s = - z/std_t
