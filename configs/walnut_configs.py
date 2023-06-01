@@ -1,8 +1,8 @@
 import ml_collections
 from .default_config import get_default_configs
 
-def get_config():
-  config = get_default_configs()
+def get_config(args):
+  config = get_default_configs(args)
 
   # data
   data = config.data
@@ -32,7 +32,7 @@ def get_config():
   config.model.model_name = 'OpenAiUNetModel'
   config.model.attention_resolutions = [config.data.im_size // 16, config.data.im_size // 8]
 
-  config.sampling.load_model_from_path = '/localdata/AlexanderDenker/score_based_baseline/checkpoints/2023_02_22_10:02'
+  config.sampling.load_model_from_path = ''
   config.sampling.model_name = "model.pt"
 
 

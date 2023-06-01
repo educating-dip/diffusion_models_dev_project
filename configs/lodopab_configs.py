@@ -3,8 +3,8 @@ import ml_collections
 from .default_config import get_default_configs
 
 
-def get_config():
-  config = get_default_configs()
+def get_config(args):
+  config = get_default_configs(args)
 
   # data
   data = config.data
@@ -22,7 +22,7 @@ def get_config():
 
   # model
   config.model.attention_resolutions = [16, 32]
-  config.sampling.load_model_from_path = '/localdata/AlexanderDenker/score_based_baseline/LoDoPabCT/checkpoints/2023_04_12_10:04'
+  config.sampling.load_model_from_path = ''
   config.sampling.model_name = 'model.pt'
 
   return config

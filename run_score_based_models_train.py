@@ -1,35 +1,14 @@
 import os
 import yaml
-import torch
-import functools
 
-from datetime import datetime
-from src import (get_standard_sde, score_model_simple_trainer, get_standard_score, get_standard_configs, get_standard_train_dataset)
-
+from src import (get_standard_sde, score_model_simple_trainer, get_standard_score, get_standard_train_dataset)
 from configs.disk_ellipses_configs import get_config
-#from configs.lodopab_vpsde_configs import get_config
-#from configs.lodopab_configs import get_config
 
 def coordinator():
 
 	config = get_config()
 	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=False, load_model=False)
-	"""
-	print("Number of Parameters: ", sum([p.numel() for p in score.parameters()]))
-	param_size = 0
-	for param in score.parameters():
-		param_size += param.nelement() * param.element_size()
-		print(param.nelement(), param.element_size())
-	buffer_size = 0
-	for buffer in score.buffers():
-		buffer_size += buffer.nelement() * buffer.element_size()
-
-	size_all_mb = (param_size + buffer_size) / 1024**2
-	print('model size: {:.3f}MB'.format(size_all_mb))
-	"""
-
-
 	base_path = "/localdata/AlexanderDenker/score_based_baseline"
 	if config.data.name == 'LoDoPabCT':
 		log_dir = os.path.join(base_path, 'LoDoPabCT')

@@ -1,7 +1,7 @@
 ''' 
 Inspired to https://github.com/yang-song/score_sde_pytorch/blob/main/sampling.py 
 '''
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, Tuple
 
 import os
 import torchvision
@@ -12,7 +12,8 @@ from tqdm import tqdm
 from torch import Tensor
 from torch.utils.tensorboard import SummaryWriter
 
-from ..utils import SDE, PSNR
+from .utils import _schedule_jump
+from ..utils import SDE, _EPSILON_PRED_CLASSES, _SCORE_PRED_CLASSES, PSNR
 from ..third_party_models import OpenAiUNetModel
 
 class BaseSampler:
@@ -38,14 +39,30 @@ class BaseSampler:
         logg_kwargs: Dict = {},
         logging: bool = True 
         ) -> Tensor:
+
         if logging:
             writer = SummaryWriter(log_dir=os.path.join(logg_kwargs['log_dir'], str(logg_kwargs['sample_num'])))
-        time_steps = np.linspace(1., self.sample_kwargs['eps'], self.sample_kwargs['num_steps'])
+        
+        num_steps = self.sample_kwargs['num_steps']
+        __iter__ = None
+        if any([isinstance(self.sde, classname) for classname in _SCORE_PRED_CLASSES]):
+            time_steps = np.linspace(
+                1., self.sample_kwargs['eps'], self.sample_kwargs['num_steps'])
+            __iter__ = time_steps
+        elif any([isinstance(self.sde, classname) for classname in _EPSILON_PRED_CLASSES]):
+            assert self.sde.num_steps >= num_steps
+            skip = self.sde.num_steps // num_steps
+            time_steps = _schedule_jump(num_steps, self.sample_kwargs['travel_length'], self.sample_kwargs['travel_repeat'])
+            time_pairs = list((i*skip, j*skip if j>0 else -1)  for i, j in zip(time_steps[:-1], time_steps[1:]))
+            __iter__= time_pairs
+        else:
+            raise NotImplementedError(self.sde.__class__ )
 
         step_size = time_steps[0] - time_steps[1]
         if self.sample_kwargs['start_time_step'] == 0:
             init_x = self.sde.prior_sampling([self.sample_kwargs['batch_size'], *self.sample_kwargs['im_shape']]).to(self.device)
         else:
+            assert not any([isinstance(self.sde, classname) for classname in _EPSILON_PRED_CLASSES])
             init_x = self.init_chain_fn(time_steps=time_steps)
         
         if logging:
@@ -59,14 +76,22 @@ class BaseSampler:
                     normalize=True, scale_each=True), global_step=0)
         
         x = init_x
-        for i in tqdm(range(self.sample_kwargs['start_time_step'], self.sample_kwargs['num_steps'])):     
-            time_step = torch.ones(self.sample_kwargs['batch_size'], device=self.device) * time_steps[i]
-            
+        i = 0
+        for step in tqdm(__iter__):
+
+            ones_vec = torch.ones(self.sample_kwargs['batch_size'], device=self.device)
+            if isinstance(step, float): 
+                time_step = ones_vec * step # t, 
+            elif isinstance(step, Tuple):
+                time_step = (ones_vec * step[0], ones_vec * step[1]) # (t, tminus1)
+            else:
+                raise NotImplementedError
+
             if self.sample_kwargs.get('adapt_freq', None) is not None:  
                 self.sample_kwargs['predictor'].update(
                         {'use_adapt': False}
                     )
-                if i % self.sample_kwargs['adapt_freq'] == 0: 
+                if i % self.sample_kwargs['adapt_freq'] == 0:
                     self.sample_kwargs['predictor'].update(
                         {'use_adapt': True}
                     )
@@ -77,7 +102,7 @@ class BaseSampler:
                 x=x,
                 time_step=time_step,
                 step_size=step_size,
-                datafitscale=i/self.sample_kwargs['num_steps'],
+                datafitscale=step/self.sample_kwargs['num_steps'] if not isinstance(step, Tuple) else 1.,
                 **self.sample_kwargs['predictor']
                 )
 
@@ -87,7 +112,7 @@ class BaseSampler:
                     score=self.score,
                     sde=self.sde,
                     time_step=time_step,
-                    datafitscale=i/self.sample_kwargs['num_steps'],
+                    datafitscale=step/self.sample_kwargs['num_steps'] if not isinstance(step, Tuple) else 1.,
                     **self.sample_kwargs['corrector']
                     )
 
@@ -100,5 +125,6 @@ class BaseSampler:
             writer.add_image(
                 'final_reco', torchvision.utils.make_grid(x_mean.squeeze(),
                 normalize=True, scale_each=True), global_step=0)
-        
+        i += 1
+
         return x_mean 

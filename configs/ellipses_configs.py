@@ -3,8 +3,8 @@ import ml_collections
 from .default_config import get_default_configs
 
 
-def get_config():
-  config = get_default_configs()
+def get_config(args):
+  config = get_default_configs(args)
 
   # data
   data = config.data

@@ -1,13 +1,12 @@
-from typing import Optional, Any, Dict, Tuple
+from typing import Optional, Any, Dict, Tuple, Union
 
 import torch
 import numpy as np
 import torch.nn as nn
-import warnings 
 
 from torch import Tensor
 from src.utils.cg import cg
-from src.utils import SDE, VESDE, VPSDE
+from src.utils import SDE, VESDE, VPSDE, DDPM, _EPSILON_PRED_CLASSES, _SCORE_PRED_CLASSES
 from src.third_party_models import OpenAiUNetModel
 
 def Euler_Maruyama_sde_predictor(
@@ -22,9 +21,8 @@ def Euler_Maruyama_sde_predictor(
     aTweedy: bool = False
     ) -> Tuple[Tensor, Tensor]:
     '''
-    Implements the predictor step using Euler-Maruyama 
-    (i.e., see Eq.30) in 
-        1. @article{song2020score,
+    Implements the predictor step using Euler-Maruyama for VE/VP-SDE models
+    in  1. @article{song2020score,
             title={Score-based generative modeling through stochastic differential equations},
             author={Song, Yang and Sohl-Dickstein, Jascha and Kingma,
                 Diederik P and Kumar, Abhishek and Ermon, Stefano and Poole, Ben},
@@ -51,6 +49,7 @@ def Euler_Maruyama_sde_predictor(
             year={2022}
         }, available at https://arxiv.org/pdf/2209.14687.pdf.
     '''
+    assert not any([isinstance(sde,classname) for classname in _EPSILON_PRED_CLASSES])
     if nloglik is not None: assert (datafitscale is not None) and (penalty is not None)
     x.requires_grad_()
     s = score(x, time_step).detach() if not aTweedy else score(x, time_step)
@@ -66,10 +65,9 @@ def Euler_Maruyama_sde_predictor(
     if nloglik is not None and not aTweedy: _s = _s - penalty*nloglik_grad*datafitscale # minus for negative log-lik.
     x_mean = x - (drift - diffusion[:, None, None, None].pow(2)*_s)*step_size
     noise = torch.sqrt(diffusion[:, None, None, None].pow(2)*step_size)*torch.randn_like(x)
-    x = x_mean + noise
-    
-    if aTweedy:
-        x = x - penalty*nloglik_grad
+
+    x = x_mean + noise # Algo.1  in 3. line 6
+    if aTweedy: x = x - penalty*nloglik_grad*datafitscale # Algo.1 sin 3. line 7
 
     return x.detach(), x_mean.detach()
 
@@ -88,6 +86,8 @@ def Langevin_sde_corrector(
     ''' 
     Implements the corrector step using Langevin MCMC   
     '''
+    assert not any([isinstance(sde,classname) for classname in _EPSILON_PRED_CLASSES])
+
     if nloglik is not None: assert (datafitscale is not None) and (penalty is not None)
     for _ in range(corrector_steps):
         x.requires_grad_()
@@ -107,7 +107,7 @@ def decomposed_diffusion_sampling_sde_predictor(
     sde: SDE,
     x: Tensor,
     rhs: Tensor,
-    time_step: Tensor,
+    time_step: Union[Tensor, Tuple[Tensor,Tensor]],
     eta: float,
     gamma: float,
     step_size: float,
@@ -118,7 +118,7 @@ def decomposed_diffusion_sampling_sde_predictor(
     ) -> Tuple[Tensor, Tensor]:
 
     '''
-    It implements ``Decomposed Diffusion Sampling'' for the VE-SDE model 
+    It implements ``Decomposed Diffusion Sampling'' for the VE/VP-SDE model 
         presented in 
             1. @article{chung2023fast,
                 title={Fast Diffusion Sampler for Inverse Problems by Geometric Decomposition},
@@ -131,10 +131,10 @@ def decomposed_diffusion_sampling_sde_predictor(
     '''
     Implements the Tweedy denosing step proposed in ``Diffusion Posterior Sampling''.
     '''
-
+    t = time_step if not isinstance(time_step, Tuple) else time_step[0]
     with torch.no_grad():
-        s = score(x, time_step).detach()
-        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step) # Tweedy denoising step
+        s = score(x, t).detach()
+        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=t) # Tweedy denoising step
         rhs = xhat0 + gamma*rhs
         xhat = cg(x=xhat0, ray_trafo=ray_trafo,  rhs=rhs, gamma=gamma, n_iter=cg_kwargs['max_iter'])
         '''
@@ -146,7 +146,15 @@ def decomposed_diffusion_sampling_sde_predictor(
                 year={2020}
             }, available at https://arxiv.org/pdf/2010.02502.pdf.
         '''
-        x = _ddim_dds(sde=sde, s=s, xhat=xhat, time_step=time_step, step_size=step_size, eta=eta, use_simplified_eqn=use_simplified_eqn)
+        x = _ddim_dds(
+            sde=sde, 
+            s=s, 
+            xhat=xhat, 
+            time_step=time_step, 
+            step_size=step_size, 
+            eta=eta, 
+            use_simplified_eqn=use_simplified_eqn,
+            )
 
     return x.detach(), xhat
 
@@ -174,7 +182,7 @@ def adapted_ddim_sde_predictor(
     score: OpenAiUNetModel,
     sde: SDE,
     x: Tensor,
-    time_step: Tensor,
+    time_step: Union[Tensor, Tuple[Tensor,Tensor]],
     eta: float,
     step_size: float,
     adapt_fn: callable,
@@ -183,12 +191,21 @@ def adapted_ddim_sde_predictor(
     use_simplified_eqn: bool = False,
     ) -> Tuple[Tensor, Tensor]:
 
-    if use_adapt : adapt_fn(x=x, time_step=time_step)
+    t = time_step if not isinstance(time_step, Tuple) else time_step[0]
+    if use_adapt : adapt_fn(x=x, time_step=t)
     with torch.no_grad():
-        s = score(x, time_step)
-        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step)
+        s = score(x, t)
+        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=t)
 
-    x = _ddim_dds(sde=sde, s=s, xhat=xhat0, time_step=time_step, step_size=step_size, eta=eta, use_simplified_eqn=use_simplified_eqn)
+    x = _ddim_dds(
+        sde=sde,
+        s=s,
+        xhat=xhat0,
+        time_step=time_step,
+        step_size=step_size,
+        eta=eta, 
+        use_simplified_eqn=use_simplified_eqn, 
+        )
     
     return x.detach(), xhat0
 
@@ -196,36 +213,29 @@ def _ddim_dds(
     sde: SDE,
     s: Tensor,
     xhat: Tensor,
-    time_step: Tensor,
+    time_step: Union[Tensor, Tuple[Tensor,Tensor]],
     step_size: Tensor, 
     eta: float, 
     use_simplified_eqn: bool = False
     ) -> Tensor:
     
+    t = time_step if not isinstance(time_step, Tuple) else time_step[0]
+    tminus1 = time_step-step_size if not isinstance(time_step,Tuple) else time_step[1]
+    std_t = sde.marginal_prob_std(t=t)[:, None, None, None]
     if isinstance(sde, VESDE):
-        std_t = sde.marginal_prob_std(t=time_step
-            )[:, None, None, None]
-        std_tminus1 = sde.marginal_prob_std(t=time_step-step_size
-            )[:, None, None, None]
+        std_tminus1 = sde.marginal_prob_std(t=tminus1)[:, None, None, None]
         tbeta = 1 - ( std_tminus1.pow(2) * std_t.pow(-2) ) if not use_simplified_eqn else torch.tensor(1.) 
         noise_deterministic = - std_tminus1*std_t*torch.sqrt( 1 - tbeta.pow(2)*eta**2 ) * s
-        noise_stochastic =  std_tminus1 * eta*tbeta*torch.randn_like(xhat)
-    elif isinstance(sde, VPSDE):
-        mean_tminus1 = sde.marginal_prob_mean(t=time_step-step_size
-            )[:, None, None, None]
-        mean_t = sde.marginal_prob_mean(t=time_step
-            )[:, None, None, None]
-        std_t = sde.marginal_prob_std(t=time_step
-            )[:, None, None, None]
+        noise_stochastic = std_tminus1 * eta*tbeta*torch.randn_like(xhat)
+    elif any([isinstance(sde, classname) for classname in [VPSDE, DDPM]]):
+        mean_tminus1 = sde.marginal_prob_mean(t=tminus1)[:, None, None, None]
+        mean_t = sde.marginal_prob_mean(t=t)[:, None, None, None]
         tbeta = ((1 - mean_tminus1.pow(2)) / ( 1 - mean_t.pow(2) ) ).pow(.5) * (1 - mean_t.pow(2) * mean_tminus1.pow(-2) ).pow(.5) 
-        if tbeta.isnan():
-            warnings.warn(' ``tbeta'' isn ``nan'' default = 0. Note that ``tbeta'' is expected to be ``Nan'' in the last step.')
-            tbeta = torch.tensor(0)
-
+        if tbeta.isnan(): tbeta = torch.tensor(0)
         xhat = xhat*mean_tminus1
-        # the DDIM sampling is given using a different parametrization of the score
-        e = - std_t * s # s = - z/std_t
-        noise_deterministic = torch.sqrt( 1 - mean_tminus1.pow(2) - tbeta.pow(2)*eta**2 )*e
+        eps_ = _eps_pred_from_s(s, std_t) if isinstance(sde, VPSDE) else s
+        # DDIM sampling scheme is derive using a epsilon-matsching parametrization
+        noise_deterministic = torch.sqrt( 1 - mean_tminus1.pow(2) - tbeta.pow(2)*eta**2 )*eps_
         noise_stochastic = eta*tbeta*torch.randn_like(xhat)
     else:
         raise NotImplementedError
@@ -234,21 +244,66 @@ def _ddim_dds(
 
 def _aTweedy(s: Tensor, x: Tensor, sde: SDE, time_step:Tensor) -> Tensor:
 
-    update = x + s*sde.marginal_prob_std(time_step)[:, None, None, None].pow(2)
     div = sde.marginal_prob_mean(time_step)[:, None, None, None].pow(-1)
+    std_t = sde.marginal_prob_std(time_step)[:, None, None, None]
+    if any([isinstance(sde, classname) for classname in _SCORE_PRED_CLASSES]):
+        s = _eps_pred_from_s(s=s, std_t=std_t) # `s' here is `eps_.'
+    update = x - s*std_t
+
     return update*div
 
 def chain_simple_init(
     time_steps: Tensor,
     sde: SDE,
-    filtbackproj: Tensor, 
+    filtbackproj: Tensor,
     start_time_step: int,
     im_shape: Tuple[int, int],
-    batch_size: int, 
+    batch_size: int,
     device: Any
     ) -> Tensor:
 
     t = torch.ones(batch_size, device=device) * time_steps[start_time_step]
     std = sde.marginal_prob_std(t)[:, None, None, None]
+
     return filtbackproj + torch.randn(batch_size, *im_shape, device=device) * std
+
+def _eps_pred_from_s(s, std_t):
+    # based on score-matching = - epsilon-mathcing / std_t
+    """s obtained with score-matching, converting to epsilon-prediction"""
+
+    return - std_t * s
+
+
+def _check_times(times, t_0, num_steps):
+
+    assert times[0] > times[1], (times[0], times[1])
+
+    assert times[-1] == -1, times[-1]
+
+    for t_last, t_cur in zip(times[:-1], times[1:]):
+        assert abs(t_last - t_cur) == 1, (t_last, t_cur)
+    
+    for t in times:
+        assert t >= t_0, (t, t_0)
+        assert t <= num_steps, (t, num_steps)
+
+def _schedule_jump(num_steps, travel_length, travel_repeat):
+    jumps = {}
+    for j in range(0, num_steps - travel_length, travel_length):
+        jumps[j] = travel_repeat - 1
+
+    t = num_steps
+    time_steps = []
+    while t >= 1:
+        t = t-1
+        time_steps.append(t)
+        if jumps.get(t, 0) > 0:
+            jumps[t] = jumps[t] - 1
+            for _ in range(travel_length):
+                t = t + 1
+                time_steps.append(t)
+    time_steps.append(-1)
+    _check_times(time_steps, -1, num_steps)
+
+    return time_steps
 

@@ -1,4 +1,4 @@
-from .sde import SDE, VESDE, VPSDE
+from .sde import SDE, VESDE, VPSDE, DDPM, _EPSILON_PRED_CLASSES, _SCORE_PRED_CLASSES
 from .ema import ExponentialMovingAverage
 from .losses import loss_fn
 from .metrics import PSNR, SSIM

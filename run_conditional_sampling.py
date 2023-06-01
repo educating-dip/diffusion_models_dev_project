@@ -23,12 +23,10 @@ parser.add_argument('--penalty', default=1, help='reg. penalty used for ``naive'
 parser.add_argument('--gamma', default=0.01, help='reg. used for ``dds''.')
 parser.add_argument('--eta', default=0.15, help='reg. used for ``dds'' weighting stochastic and deterministic noise.')
 parser.add_argument('--pct_chain_elapsed', default=0,  help='``pct_chain_elapsed'' actives init of chain')
-parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde'])
+parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde', 'ddpm'])
 parser.add_argument('--cg_iter', default=5)
 
 def coordinator(args):
-	print(args)
-
 	config, dataconfig = get_standard_configs(args)
 	save_root = get_standard_path(args)
 	save_root.mkdir(parents=True, exist_ok=True)
@@ -45,7 +43,6 @@ def coordinator(args):
 	ray_trafo = ray_trafo.to(device=config.device)
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
 
-	print("num images: ", config.data.validation.num_images)
 	psnr_list = [] 
 	ssim_list = []
 	for i, data_sample in enumerate(islice(dataset, config.data.validation.num_images)):

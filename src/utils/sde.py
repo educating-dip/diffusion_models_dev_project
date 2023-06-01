@@ -3,12 +3,10 @@ Based on the variance exploding (VE) and variance presenrving (VP) SDE.
 The derivations are given in [https://arxiv.org/pdf/2011.13456.pdf] Appendix C.
 Based on: https://github.com/yang-song/score_sde_pytorch/blob/main/sde_lib.py
 '''
-from typing import Any, Optional
 import torch
 import numpy as np 
 import abc
 
-from torch import Tensor
 
 class SDE(abc.ABC):
 	"""
@@ -156,3 +154,39 @@ class VPSDE(SDE):
 		
 	def prior_sampling(self, shape):
 		return torch.randn(*shape) 
+
+
+class DDPM(SDE):
+	def __init__(self, beta_min: float = 0.0001, beta_max: float = 0.02, num_steps: int = 1000):
+		super().__init__()
+		self.beta_min = beta_min
+		self.beta_max = beta_max
+		self.num_steps = num_steps
+		betas = torch.from_numpy(np.linspace(self.beta_min, self.beta_max, self.num_steps))
+		self.betas = torch.cat([torch.zeros(1), betas], dim=0)
+
+	def _compute_alpha(self, t):
+		return (1 - self.betas.to(t.device)).cumprod(dim=0).index_select(0, t.long() + 1).to(torch.float32)
+	
+	def diffusion_coeff(self, ):
+		raise NotImplementedError
+
+	def sde(self, ):
+		raise NotImplementedError
+
+	def marginal_prob(self, x, t):
+		return x * self.marginal_prob_mean(t=t), self.marginal_prob_std(t=t)
+
+	def marginal_prob_std(self, t):
+		a = self._compute_alpha(t=t)
+		return (1. - a).pow(.5)
+
+	def marginal_prob_mean(self, t):
+		a = self._compute_alpha(t=t)
+		return a.pow(.5)
+		
+	def prior_sampling(self, shape):
+		return torch.randn(*shape) 
+
+_EPSILON_PRED_CLASSES = [DDPM]
+_SCORE_PRED_CLASSES = [VPSDE, VESDE]

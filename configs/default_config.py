@@ -1,22 +1,26 @@
 import ml_collections
 
-def get_default_configs():
+def get_default_configs(args):
 
     config = ml_collections.ConfigDict()
     config.device = 'cuda'
     config.seed = 1
-
     # sde configs
     config.sde = sde = ml_collections.ConfigDict()
-    sde.type = 'vpsde' #'vesde'
-    #sde.sigma = 25.0
+    sde.type = args.sde # 'vpsde', 'vesde', 'ddpm'
     # the largest noise scale sigma_max was choosen according to Technique 1 from [https://arxiv.org/pdf/2006.09011.pdf], 
     # i.e. to be as large as the maximum eucledian distance between pairs of data -> ~100
-    sde.sigma_min = 0.01
-    sde.sigma_max = 100
-
-    sde.beta_min = 0.1
-    sde.beta_max = 10
+    if args.sde in ['vesde', 'vpsde']:
+        sde.sigma_min = 0.01
+        sde.sigma_max = 100
+        sde.beta_min = 0.1
+        sde.beta_max = 10
+    elif args.sde in ['ddpm']:
+        sde.beta_min = 0.0001
+        sde.beta_max = 0.02
+        sde.num_steps = 1000
+    else:
+        raise NotImplementedError(args.sde)
 
     # training configs
     config.training = training = ml_collections.ConfigDict()
@@ -39,6 +43,9 @@ def get_default_configs():
     config.sampling = sampling = ml_collections.ConfigDict()
     sampling.batch_size = 1
     sampling.eps = 1e-3
+    if args.sde in ['ddpm']:
+        sampling.travel_length = 1
+        sampling.travel_repeat = 1
     
     # data configs - specify in other configs
     config.data = ml_collections.ConfigDict()
@@ -63,5 +70,11 @@ def get_default_configs():
     model.use_scale_shift_norm = True 
     model.resblock_updown = False
     model.use_new_attention_order = False
+    if args.sde in ['vesde', 'vpsde']:
+        model.max_period = 0.005
+    elif args.sde in ['ddpm']:
+        model.max_period = 1e4
+    else:
+        raise NotImplementedError(args.sde)
 
     return config
