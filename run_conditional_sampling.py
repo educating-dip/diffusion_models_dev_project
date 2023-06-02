@@ -1,10 +1,8 @@
-import os
 import argparse
 import yaml 
 import torch 
 import numpy as np 
 import matplotlib.pyplot as plt
-from itertools import islice
 from itertools import islice
 from PIL import Image
 

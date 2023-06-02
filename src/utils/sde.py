@@ -162,11 +162,16 @@ class DDPM(SDE):
 		self.beta_min = beta_min
 		self.beta_max = beta_max
 		self.num_steps = num_steps
-		betas = torch.from_numpy(np.linspace(self.beta_min, self.beta_max, self.num_steps))
-		self.betas = torch.cat([torch.zeros(1), betas], dim=0)
+		self.betas = torch.from_numpy(np.linspace( 
+				self.beta_min, self.beta_max, self.num_steps, dtype=np.float64)
+			) # uses fp64 for accuracy
+		assert len(self.betas.shape) == 1, 'betas must be 1-D'
+		assert (self.betas > 0).all() and (self.betas <= 1).all()
+		self.alphas = 1.0 - self.betas
 
-	def _compute_alpha(self, t):
-		return (1 - self.betas.to(t.device)).cumprod(dim=0).index_select(0, t.long() + 1).to(torch.float32)
+	def _compute_alpha_cumprod(self, t):
+		betas = torch.cat([torch.zeros(1), self.betas], dim=0)
+		return (1 - betas.to(t.device)).cumprod(dim=0).index_select(0, t.long() + 1).to(torch.float32)
 	
 	def diffusion_coeff(self, ):
 		raise NotImplementedError
@@ -175,15 +180,15 @@ class DDPM(SDE):
 		raise NotImplementedError
 
 	def marginal_prob(self, x, t):
-		return x * self.marginal_prob_mean(t=t), self.marginal_prob_std(t=t)
+		return x * self.marginal_prob_mean(t=t)[:, None, None, None], self.marginal_prob_std(t=t)
 
 	def marginal_prob_std(self, t):
-		a = self._compute_alpha(t=t)
-		return (1. - a).pow(.5)
+		bar_a = self._compute_alpha_cumprod(t=t)
+		return (1. - bar_a).pow(.5)
 
 	def marginal_prob_mean(self, t):
-		a = self._compute_alpha(t=t)
-		return a.pow(.5)
+		bar_a = self._compute_alpha_cumprod(t=t)
+		return bar_a.pow(.5)
 		
 	def prior_sampling(self, shape):
 		return torch.randn(*shape) 

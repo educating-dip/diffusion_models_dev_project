@@ -1,15 +1,28 @@
 import os
 import yaml
+import argparse
+from src import (get_standard_sde, score_model_simple_trainer, get_standard_score, 
+		 get_standard_train_dataset)
 
-from src import (get_standard_sde, score_model_simple_trainer, get_standard_score, get_standard_train_dataset)
-from configs.disk_ellipses_configs import get_config
+parser = argparse.ArgumentParser(description='training')
+parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde', 'ddpm'])
+parser.add_argument('--base_path', default='/localdata/AlexanderDenker/score_based_baseline')
+parser.add_argument('--train_model_on', default='ellipses', help='training datasets', choices=['lodopab', 'ellipses'])
 
-def coordinator():
+def coordinator(args):
 
-	config = get_config()
+	if args.train_model_on == 'ellipses': 
+		from configs.disk_ellipses_configs import get_config
+		config = get_config(args)
+	elif args.train_model_on == 'lodopab': 
+		from configs.lodopab_configs import get_config
+		config = get_config(args)
+	else: 
+		raise NotImplementedError
+
 	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=False, load_model=False)
-	base_path = "/localdata/AlexanderDenker/score_based_baseline"
+	base_path = args.base_path
 	if config.data.name == 'LoDoPabCT':
 		log_dir = os.path.join(base_path, 'LoDoPabCT')
 	elif config.data.name == 'DiskDistributedEllipsesDataset':
@@ -18,7 +31,6 @@ def coordinator():
 		raise NotImplementedError
 
 	log_dir = os.path.join(log_dir, config.sde.type)
-
 	if not os.path.exists(log_dir):
 		os.makedirs(log_dir)
 
@@ -61,4 +73,5 @@ def coordinator():
 		)
 
 if __name__ == '__main__':
-	coordinator()
+	args = parser.parse_args()
+	coordinator(args)
