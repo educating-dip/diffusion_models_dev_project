@@ -30,7 +30,7 @@ def epsilon_based_loss_fn(x, model, sde):
         x: A mini-batch of training data.
         sde: the forward sde
     """
-    random_t = torch.radnint(1, sde.num_steps, (x.shape[0],), device=x.device)
+    random_t = torch.randint(1, sde.num_steps, (x.shape[0],), device=x.device)
     z = torch.randn_like(x)
     mean, std = sde.marginal_prob(x, random_t)
     # Diffuse the data for a given number of diffusion steps. In other words, sample from q(x_t | x_0)
