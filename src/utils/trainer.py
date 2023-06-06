@@ -1,4 +1,4 @@
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, Tuple
 import os 
 import torch 
 import torchvision
@@ -14,7 +14,7 @@ from .ema import ExponentialMovingAverage
 from .sde import SDE, _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES
 
 from ..third_party_models import OpenAiUNetModel
-from ..samplers import BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector
+from ..samplers import BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, ddim, apTweedy
 
 def score_model_simple_trainer(
 	score: OpenAiUNetModel,
@@ -79,7 +79,34 @@ def score_model_simple_trainer(
 						},
 					device=device)
 			elif any([isinstance(sde, classname) for classname in _EPSILON_PRED_CLASSES]):
-				pass
+
+				def det_ddim_sampler(score, sde, x, time_step, step_size, datafitscale=1.):
+					t = time_step if not isinstance(time_step, Tuple) else time_step[0]
+					with torch.no_grad():
+						s = score(x, t).detach()
+						xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t)
+					# setting ``eta'' equals to ``0'' turns ddim into ddpm
+					x = ddim(sde=sde, s=s, xhat=xhat0, time_step=time_step, step_size=step_size, eta=0, use_simplified_eqn=False)
+					
+					return x.detach(), xhat0.detach()
+				
+				sampler = BaseSampler(
+					score=score,
+					sde=sde,
+					predictor=det_ddim_sampler, 
+					corrector=None,
+					init_chain_fn=None,
+					sample_kwargs={
+						'num_steps': val_kwargs['num_steps'],
+						'start_time_step': 0,
+						'batch_size': val_kwargs['batch_size'],
+						'im_shape': x.shape[1:],
+						'eps': val_kwargs['eps'],
+						'travel_length': 1, 
+						'travel_repeat': 1, 
+						'predictor': {}
+						},
+					device=device)
 
 			x_mean = sampler.sample(logging=False)
 			sample_grid = torchvision.utils.make_grid(x_mean, normalize=True, scale_each=True)

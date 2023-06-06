@@ -54,7 +54,7 @@ def Euler_Maruyama_sde_predictor(
     x.requires_grad_()
     s = score(x, time_step).detach() if not aTweedy else score(x, time_step)
     if nloglik is not None:
-        if aTweedy: xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step)
+        if aTweedy: xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=time_step)
         loss = nloglik(x if not aTweedy else xhat0)
         nloglik_grad = torch.autograd.grad(outputs=loss, inputs=x)[0]
     drift, diffusion = sde.sde(x, time_step)
@@ -134,7 +134,7 @@ def decomposed_diffusion_sampling_sde_predictor(
     t = time_step if not isinstance(time_step, Tuple) else time_step[0]
     with torch.no_grad():
         s = score(x, t).detach()
-        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=t) # Tweedy denoising step
+        xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t) # Tweedy denoising step
         rhs = xhat0 + gamma*rhs
         xhat = cg(x=xhat0, ray_trafo=ray_trafo,  rhs=rhs, gamma=gamma, n_iter=cg_kwargs['max_iter'])
         '''
@@ -146,7 +146,7 @@ def decomposed_diffusion_sampling_sde_predictor(
                 year={2020}
             }, available at https://arxiv.org/pdf/2010.02502.pdf.
         '''
-        x = _ddim_dds(
+        x = ddim(
             sde=sde, 
             s=s, 
             xhat=xhat, 
@@ -156,7 +156,7 @@ def decomposed_diffusion_sampling_sde_predictor(
             use_simplified_eqn=use_simplified_eqn,
             )
 
-    return x.detach(), xhat
+    return x.detach(), xhat.detach()
 
 def _adapt(
     x: Tensor, 
@@ -173,7 +173,7 @@ def _adapt(
     for _ in range(num_steps):
         optim.zero_grad()
         s = score(x, time_step)
-        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=time_step)
+        xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=time_step)
         loss = loss_fn(x=xhat0)
         loss.backward()
         optim.step()
@@ -195,9 +195,9 @@ def adapted_ddim_sde_predictor(
     if use_adapt : adapt_fn(x=x, time_step=t)
     with torch.no_grad():
         s = score(x, t)
-        xhat0 = _aTweedy(s=s, x=x, sde=sde, time_step=t)
+        xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t)
 
-    x = _ddim_dds(
+    x = ddim(
         sde=sde,
         s=s,
         xhat=xhat0,
@@ -207,9 +207,9 @@ def adapted_ddim_sde_predictor(
         use_simplified_eqn=use_simplified_eqn, 
         )
     
-    return x.detach(), xhat0
+    return x.detach(), xhat0.detach()
 
-def _ddim_dds(
+def ddim(
     sde: SDE,
     s: Tensor,
     xhat: Tensor,
@@ -230,8 +230,8 @@ def _ddim_dds(
     elif any([isinstance(sde, classname) for classname in [VPSDE, DDPM]]):
         mean_tminus1 = sde.marginal_prob_mean(t=tminus1)[:, None, None, None]
         mean_t = sde.marginal_prob_mean(t=t)[:, None, None, None]
-        tbeta = ((1 - mean_tminus1.pow(2)) / ( 1 - mean_t.pow(2) ) ).pow(.5) * (1 - mean_t.pow(2) * mean_tminus1.pow(-2) ).pow(.5) 
-        if tbeta.isnan(): tbeta = torch.tensor(0)
+        tbeta = ((1 - mean_tminus1.pow(2)) / ( 1 - mean_t.pow(2) ) ).pow(.5) * (1 - mean_t.pow(2) * mean_tminus1.pow(-2) ).pow(.5)
+        if any(tbeta.isnan()): tbeta = torch.zeros(*tbeta.shape, device=s.device)
         xhat = xhat*mean_tminus1
         eps_ = _eps_pred_from_s(s, std_t) if isinstance(sde, VPSDE) else s
         # DDIM sampling scheme is derive using a epsilon-matsching parametrization
@@ -242,7 +242,7 @@ def _ddim_dds(
 
     return xhat + noise_deterministic + noise_stochastic
 
-def _aTweedy(s: Tensor, x: Tensor, sde: SDE, time_step:Tensor) -> Tensor:
+def apTweedy(s: Tensor, x: Tensor, sde: SDE, time_step:Tensor) -> Tensor:
 
     div = sde.marginal_prob_mean(time_step)[:, None, None, None].pow(-1)
     std_t = sde.marginal_prob_std(time_step)[:, None, None, None]

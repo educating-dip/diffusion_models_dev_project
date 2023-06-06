@@ -52,7 +52,9 @@ class BaseSampler:
         elif any([isinstance(self.sde, classname) for classname in _EPSILON_PRED_CLASSES]):
             assert self.sde.num_steps >= num_steps
             skip = self.sde.num_steps // num_steps
-            time_steps = _schedule_jump(num_steps, self.sample_kwargs['travel_length'], self.sample_kwargs['travel_repeat'])
+            # if ``self.sample_kwargs['travel_length']'' is 1. and ''self.sample_kwargs['travel_repeat']'' is 1. 
+            # ``_schedule_jump'' behaves as ``np.arange(-1. num_steps, 1)[::-1]''
+            time_steps = _schedule_jump(num_steps, self.sample_kwargs['travel_length'], self.sample_kwargs['travel_repeat']) 
             time_pairs = list((i*skip, j*skip if j>0 else -1)  for i, j in zip(time_steps[:-1], time_steps[1:]))
             __iter__= time_pairs
         else:
