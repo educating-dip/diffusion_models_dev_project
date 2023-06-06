@@ -212,7 +212,17 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
         lloss_fn = lambda x: torch.mean(
             (ray_trafo(x) - observation).pow(2))  + float(args.tv_penalty) * tv_loss(x)
         adapt_fn = functools.partial(
+<<<<<<< Updated upstream
             _adapt, score=score, sde=sde, loss_fn=lloss_fn, num_steps=int(args.num_optim_step))
+=======
+            _adapt,
+            score=score,
+            sde=sde, 
+            loss_fn=loss_fn,
+            num_steps=10
+        )
+
+>>>>>>> Stashed changes
         predictor = functools.partial(
             adapted_ddim_sde_predictor, score=score, sde=sde, adapt_fn=adapt_fn)
     else:
