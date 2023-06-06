@@ -594,6 +594,8 @@ class OpenAiUNetModel(nn.Module):
             h = module(h, emb)
         h = h.type(x.dtype)
         h = self.out(h)
-        h = h / self.marginal_prob_std(timesteps)[:, None, None, None]
+
+        if not self.marginal_prob_std == None:
+            h = h / self.marginal_prob_std(timesteps)[:, None, None, None]
 
         return h
