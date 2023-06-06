@@ -199,6 +199,8 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
             'predictor': {
                 'eta': float(args.eta), 
                 'use_simplified_eqn': True, 
+                'gamma': float(args.gamma),
+                'ray_trafo': ray_trafo 
                 },
             'corrector': {}
             }
@@ -212,19 +214,21 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
         lloss_fn = lambda x: torch.mean(
             (ray_trafo(x) - observation).pow(2))  + float(args.tv_penalty) * tv_loss(x)
         adapt_fn = functools.partial(
-<<<<<<< Updated upstream
             _adapt, score=score, sde=sde, loss_fn=lloss_fn, num_steps=int(args.num_optim_step))
-=======
-            _adapt,
-            score=score,
-            sde=sde, 
-            loss_fn=loss_fn,
-            num_steps=10
-        )
+        if args.add_cg:
 
->>>>>>> Stashed changes
-        predictor = functools.partial(
-            adapted_ddim_sde_predictor, score=score, sde=sde, adapt_fn=adapt_fn)
+            predictor = functools.partial(
+            adapted_ddim_sde_predictor, score=score, 
+                                        sde=sde, 
+                                        adapt_fn=adapt_fn, 
+                                        add_cg=args.add_cg,
+                                        rhs=ray_trafo.trafo_adjoint(observation),
+                                        cg_kwargs={'max_iter': int(args.cg_iter)})
+        else: 
+            predictor = functools.partial(
+            adapted_ddim_sde_predictor, score=score, sde=sde, adapt_fn=adapt_fn, add_cg=args.add_cg)
+            
+    
     else:
         raise NotImplementedError
 

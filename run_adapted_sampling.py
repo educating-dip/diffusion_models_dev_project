@@ -24,6 +24,10 @@ parser.add_argument('--num_optim_step', default=10, help='num. of optimization s
 parser.add_argument('--adapt_freq', default=1, help='freq. of adaptation step in sampl.')
 parser.add_argument('--lora_include_blocks', default=['input_blocks','middle_block','output_blocks','out'], nargs='+', help='lora kwargs impl. of arch. blocks included')
 parser.add_argument('--lora_rank', default=4, help='lora kwargs impl. of rank')
+parser.add_argument('--add_cg', action='store_true', help="do DDS steps after adaptation.")
+parser.add_argument('--cg_iter', default=4, help="Number of CG steps for DDS update.")
+parser.add_argument('--gamma', default=0.01, help='reg. used for ``dds''.')
+
 
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args)

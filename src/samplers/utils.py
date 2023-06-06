@@ -189,6 +189,11 @@ def adapted_ddim_sde_predictor(
     use_adapt: bool = False,
     datafitscale: Optional[float] = None, # pylint: disable=unused-variable
     use_simplified_eqn: bool = False,
+    add_cg: bool = False,
+    gamma: float = None,
+    cg_kwargs: Dict = None, 
+    ray_trafo: callable = None,
+    rhs: Tensor = None
     ) -> Tuple[Tensor, Tensor]:
 
     t = time_step if not isinstance(time_step, Tuple) else time_step[0]
@@ -196,6 +201,10 @@ def adapted_ddim_sde_predictor(
     with torch.no_grad():
         s = score(x, t)
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t)
+
+        if add_cg:
+            rhs = xhat0 + gamma*rhs
+            xhat = cg(x=xhat0, ray_trafo=ray_trafo,  rhs=rhs, gamma=gamma, n_iter=cg_kwargs['max_iter'])
 
     x = ddim(
         sde=sde,
