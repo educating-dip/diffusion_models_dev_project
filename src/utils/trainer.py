@@ -14,7 +14,7 @@ from .ema import ExponentialMovingAverage
 from .sde import SDE, _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES
 
 from ..third_party_models import OpenAiUNetModel
-from ..samplers import BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, ddim, apTweedy
+from ..samplers import BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, wrapper_ddim
 
 def score_model_simple_trainer(
 	score: OpenAiUNetModel,
@@ -80,20 +80,10 @@ def score_model_simple_trainer(
 					device=device)
 			elif any([isinstance(sde, classname) for classname in _EPSILON_PRED_CLASSES]):
 
-				def det_ddim_sampler(score, sde, x, time_step, step_size, datafitscale=1.):
-					t = time_step if not isinstance(time_step, Tuple) else time_step[0]
-					with torch.no_grad():
-						s = score(x, t).detach()
-						xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t)
-					# setting ``eta'' equals to ``0'' turns ddim into ddpm
-					x = ddim(sde=sde, s=s, xhat=xhat0, time_step=time_step, step_size=step_size, eta=0, use_simplified_eqn=False)
-					
-					return x.detach(), xhat0.detach()
-				
 				sampler = BaseSampler(
 					score=score,
 					sde=sde,
-					predictor=det_ddim_sampler, 
+					predictor=wrapper_ddim, 
 					corrector=None,
 					init_chain_fn=None,
 					sample_kwargs={

@@ -316,3 +316,20 @@ def _schedule_jump(num_steps, travel_length, travel_repeat):
 
     return time_steps
 
+def wrapper_ddim(
+    score: OpenAiUNetModel, 
+    sde: SDE, 
+    x: Tensor, 
+    time_step: Tensor, 
+    step_size: Tensor, 
+    datafitscale = 1. # pylint: disable=unused-variable
+    ) -> Tuple[Tensor, Tensor]:
+
+    t = time_step if not isinstance(time_step, Tuple) else time_step[0]
+    with torch.no_grad():
+        s = score(x, t).detach()
+        xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t)
+    # setting ``eta'' equals to ``0'' turns ddim into ddpm
+    x = ddim(sde=sde, s=s, xhat=xhat0, time_step=time_step, step_size=step_size, eta=0.85, use_simplified_eqn=False)
+    
+    return x.detach(), xhat0.detach()

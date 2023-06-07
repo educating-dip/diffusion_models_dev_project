@@ -36,6 +36,8 @@ def get_default_configs(args):
     validation.batch_size = 6
     validation.snr = 0.05
     validation.num_steps = 1000
+    if args.sde in ['ddpm']:
+        validation.num_steps = 100
     validation.eps = 1e-3
     validation.sample_freq = 1
 

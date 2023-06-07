@@ -4,7 +4,10 @@ import yaml
 import torch 
 import matplotlib.pyplot as plt
 import functools
-from src import (get_standard_sde, get_standard_score, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, BaseSampler) 
+from src import (
+		get_standard_sde, get_standard_score, Euler_Maruyama_sde_predictor, wrapper_ddim,
+		Langevin_sde_corrector, BaseSampler,  _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES
+	) 
 
 parser = argparse.ArgumentParser(description='conditional sampling')
 parser.add_argument('--load_path', help='model-checkpoint to load')
@@ -18,9 +21,6 @@ def coordinator(args):
 		config = yaml.load(stream, Loader=yaml.UnsafeLoader)
 		config.sampling.load_model_from_path = load_path
 
-		print(config.sde.type)
-		print(config)
-
 	if config.seed is not None:
 		torch.manual_seed(config.seed) # for reproducible noise in simulate
 
@@ -30,27 +30,48 @@ def coordinator(args):
 	score.eval()
 
 	batch_size = 4
+	if any([isinstance(sde, classname) for classname in _SCORE_PRED_CLASSES]):
+		sampler = BaseSampler(
+			score=score,
+			sde=sde,
+			predictor=functools.partial(Euler_Maruyama_sde_predictor, nloglik = None),
+			corrector=functools.partial(Langevin_sde_corrector, nloglik = None),
+			init_chain_fn=None,
+			sample_kwargs={
+						'num_steps': int(args.num_steps),
+						'start_time_step': 0,
+						'batch_size': batch_size,
+						'im_shape': [1, config.data.im_size, config.data.im_size],
+						'eps': 1e-4,
+						'predictor': {},
+						'corrector': {'corrector_steps': 1}
+						},
+			device=config.device)
+	elif any([isinstance(sde, classname) for classname in _EPSILON_PRED_CLASSES]):
 
-	sampler = BaseSampler(
-		score=score,
-		sde=sde,
-		predictor=functools.partial(Euler_Maruyama_sde_predictor, nloglik = None),
-		corrector=functools.partial(Langevin_sde_corrector, nloglik = None),
-		init_chain_fn=None,
-		sample_kwargs={
-					'num_steps': int(args.num_steps),
-					'start_time_step': 0,
-					'batch_size': batch_size,
-					'im_shape': [1, config.data.im_size, config.data.im_size],
-					'eps': 1e-4, #config.validation.eps,
-					'predictor': {},
-					'corrector': {'corrector_steps': 1}
-					},
-		device=config.device)
+		sampler = BaseSampler(
+			score=score,
+			sde=sde,
+			predictor=wrapper_ddim, 
+			corrector=None,
+			init_chain_fn=None,
+			sample_kwargs={
+				'num_steps': 100,
+				'start_time_step': 0,
+				'batch_size': batch_size,
+				'im_shape': [1, config.data.im_size, config.data.im_size],
+				'travel_length': 1, 
+				'travel_repeat': 1, 
+				'predictor': {}
+				},
+			device=config.device)
+	else: 
+		raise NotImplementedError
+
 		
 	x_mean = sampler.sample(logging=False)
 	#x_mean = torch.clamp(x_mean, 0)
-	fig, axes = plt.subplots(1,4)
+	_, axes = plt.subplots(1,4)
 
 	for idx, ax in enumerate(axes.ravel()):
 
