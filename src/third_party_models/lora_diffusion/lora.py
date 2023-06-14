@@ -278,7 +278,7 @@ _find_modules = _find_modules
 def inject_trainable_lora_extended(
     model: nn.Module,
     target_replace_module: Set[str] = UNET_EXTENDED_TARGET_REPLACE,
-    include_blocks: Set[str] = ['input_blocks', 'middle_block', 'output_blocks', 'out' ],
+    include_blocks: Set[str] = ['input_blocks', 'middle_block', 'output_blocks', 'out'],
     r: int = 4
 ):
     """
