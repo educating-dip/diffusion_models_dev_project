@@ -7,7 +7,7 @@ from src import (get_standard_sde, score_model_simple_trainer, get_standard_scor
 parser = argparse.ArgumentParser(description='training')
 parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde', 'ddpm'])
 parser.add_argument('--base_path', default='/localdata/AlexanderDenker/score_based_baseline')
-parser.add_argument('--train_model_on', default='ellipses', help='training datasets', choices=['lodopab', 'ellipses'])
+parser.add_argument('--train_model_on', default='ellipses', help='training datasets', choices=['lodopab', 'lodopab_dival', 'ellipses'])
 
 def coordinator(args):
 
@@ -17,11 +17,19 @@ def coordinator(args):
 	elif args.train_model_on == 'lodopab': 
 		from configs.lodopab_configs import get_config
 		config = get_config(args)
+	elif args.train_model_on == 'lodopab_dival':
+		from configs.lodopab_challenge_configs import get_config
+		config = get_config(args)
+
 	else: 
 		raise NotImplementedError
 
+	print(config)
 	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=False, load_model=False)
+
+	print("Number of parameters: ", sum([p.numel() for p in score.parameters()]))
+
 	base_path = args.base_path
 	if config.data.name == 'LoDoPabCT':
 		log_dir = os.path.join(base_path, 'LoDoPabCT')

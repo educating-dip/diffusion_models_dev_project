@@ -21,8 +21,8 @@ def coordinator(args):
 		config = yaml.load(stream, Loader=yaml.UnsafeLoader)
 		config.sampling.load_model_from_path = load_path
 
-	if config.seed is not None:
-		torch.manual_seed(config.seed) # for reproducible noise in simulate
+	#if config.seed is not None:
+	#	torch.manual_seed(config.seed) # for reproducible noise in simulate
 
 	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=args.ema)

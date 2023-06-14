@@ -9,19 +9,15 @@ def get_config(args):
   # data
   data = config.data
   data.name = 'LoDoPabCT'
-  data.im_size = 501
-  data.stddev = 0.0 #0.025#0.05
+  data.im_size = 362
   data.validation = validation = ml_collections.ConfigDict()
-  validation.num_images = 5
+  validation.num_images = 100
 
   # forward operator
   forward_op = config.forward_op
-  forward_op.num_angles = 200
-  forward_op.trafo_name = 'simple_trafo'
-  forward_op.impl = 'odl' #'iradon'
 
   # model
-  config.model.attention_resolutions = [16, 32]
+  config.model.attention_resolutions = [8, 16, 32]
   config.sampling.load_model_from_path = ''
   config.sampling.model_name = 'model.pt'
 
