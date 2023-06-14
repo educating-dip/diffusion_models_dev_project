@@ -16,7 +16,6 @@ from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_
     chain_simple_init, decomposed_diffusion_sampling_sde_predictor, adapted_ddim_sde_predictor, tv_loss, _adapt, _score_model_adpt)
 
 def get_standard_score(config, sde, use_ema, load_model=True):
-
     if config.model.model_name.lower() == 'OpenAiUNetModel'.lower():
         score = OpenAiUNetModel(
             image_size=config.data.im_size,
@@ -25,7 +24,7 @@ def get_standard_score(config, sde, use_ema, load_model=True):
             out_channels=config.model.out_channels,
             num_res_blocks=config.model.num_res_blocks,
             attention_resolutions=config.model.attention_resolutions,
-            marginal_prob_std=sde.marginal_prob_std if sde in [_SCORE_PRED_CLASSES] else None,
+            marginal_prob_std=sde.marginal_prob_std if any([isinstance(sde, classname) for classname in _SCORE_PRED_CLASSES]) else None,
             channel_mult=config.model.channel_mult,
             conv_resample=config.model.conv_resample,
             dims=config.model.dims,

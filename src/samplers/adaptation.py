@@ -40,9 +40,8 @@ def _score_model_adpt(
             if "bias" in name and not "emb_layers" in name:
                 param.requires_grad = True
         inject_trainable_lora_extended(score, **adpt_kwargs)
-
     elif impl == 'dif-fit':
-        pass
+        raise NotImplementedError
     else: 
         raise NotImplementedError
 
