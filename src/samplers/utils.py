@@ -131,12 +131,15 @@ def decomposed_diffusion_sampling_sde_predictor(
     '''
     Implements the Tweedy denosing step proposed in ``Diffusion Posterior Sampling''.
     '''
+    def op(x):
+        return x + gamma*ray_trafo.trafo_adjoint(ray_trafo(x))
+
     t = time_step if not isinstance(time_step, Tuple) else time_step[0]
     with torch.no_grad():
         s = score(x, t).detach()
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t) # Tweedy denoising step
-        rhs = xhat0 + gamma*rhs
-        xhat = cg(x=xhat0, ray_trafo=ray_trafo,  rhs=rhs, gamma=gamma, n_iter=cg_kwargs['max_iter'])
+        _noise_rhs = xhat0 + gamma*rhs
+        xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, gamma=gamma, n_iter=cg_kwargs['max_iter'])
         '''
         It implemets the predictor sampling strategy presented in
             2. @article{song2020denoising,
@@ -169,17 +172,19 @@ def _adapt(
     num_steps: int,
     lr: float = 1e-3, 
     gamma: float = 1e-3, 
-    cg_max_iter: int = 1
     ) -> None:
-
-    assert _has_lora_active(score=score)
+    
+    def op(x):
+        return ray_trafo.trafo_adjoint(ray_trafo(x))
+    
+    assert _has_lora_active(score=score)    
     score.eval()
     optim = torch.optim.Adam(score.parameters(), lr=lr)
     for _ in range(num_steps):
         optim.zero_grad()
         s = score(x, time_step)
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=time_step)
-        xhat0 = cg(x=xhat0, ray_trafo=ray_trafo, rhs=rhs, gamma=gamma, n_iter=cg_max_iter)
+        xhat0 = cg(op=op, x=xhat0, rhs=rhs, gamma=gamma, n_iter=1)
         loss = loss_fn(x=xhat0)
         loss.backward()
         optim.step()
@@ -220,21 +225,25 @@ def adapted_ddim_sde_predictor(
     rhs: Tensor = None
     ) -> Tuple[Tensor, Tensor]:
     
-    torch.autograd.set_detect_anomaly(True)
     t = time_step if not isinstance(time_step, Tuple) else time_step[0]
-    if use_adapt: adapt_fn(x=x, 
-        time_step=time_step, ray_trafo=ray_trafo, rhs=rhs, gamma=gamma, cg_max_iter=1)
+    if use_adapt: adapt_fn(x=x, time_step=t, 
+            ray_trafo=ray_trafo, rhs=rhs, gamma=gamma)
+
+    def op_outer_cg(x):
+        return x + gamma*ray_trafo.trafo_adjoint(ray_trafo(x))
 
     with torch.no_grad():
+        s = score(x, t) # adapted score
+        xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t)
+        if add_cg:
+            rhs = xhat0 + gamma*rhs
+            xhat0 = cg(op=op_outer_cg, x=xhat0, rhs=rhs, gamma=gamma, n_iter=cg_kwargs['max_iter'])
+
         if _has_lora(score=score):
             _tune_lora_scale(score=score, scale=0)
         s = score(x, t)
         if _has_lora(score=score):
-            _tune_lora_scale(score=score, scale=1)
-        xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t)
-        if add_cg:
-            rhs = xhat0 + gamma*rhs
-            xhat0 = cg(x=xhat0, ray_trafo=ray_trafo,  rhs=rhs, gamma=gamma, n_iter=cg_kwargs['max_iter'])
+            _tune_lora_scale(score=score, scale=1)     
         
         x = ddim(sde=sde,
             s=s,
@@ -272,7 +281,6 @@ def ddim(
         if any(tbeta.isnan()): tbeta = torch.zeros(*tbeta.shape, device=s.device)
         xhat = xhat*mean_tminus1
         eps_ = _eps_pred_from_s(s, std_t) if isinstance(sde, VPSDE) else s
-        # DDIM sampling scheme is derive using a epsilon-matsching parametrization
         noise_deterministic = torch.sqrt( 1 - mean_tminus1.pow(2) - tbeta.pow(2)*eta**2 )*eps_
         noise_stochastic = eta*tbeta*torch.randn_like(xhat)
     else:

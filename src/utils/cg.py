@@ -8,14 +8,11 @@ Batched Conjugate Gradient in PyTorch for
 
 Adapted from ODL: https://github.com/odlgroup/odl/blob/master/odl/solvers/iterative/iterative.py 
 """
-def cg(x: Tensor, ray_trafo: BaseRayTrafo, rhs: Tensor, gamma: float = 0.5, n_iter: int = 5) -> Tensor:
+def cg(op: callable, x: Tensor, rhs: Tensor, gamma: float = 0.5, n_iter: int = 5) -> Tensor:
     # solve (I + gamma A* A) x = rhs
     # starting with x 
 
     # batch x 1 x h x w
-    def op(x):
-        return x + gamma*ray_trafo.trafo_adjoint(ray_trafo(x))
-
     r = op(x)
     r = rhs - r
     p = torch.clone(r)
@@ -33,7 +30,7 @@ def cg(x: Tensor, ray_trafo: BaseRayTrafo, rhs: Tensor, gamma: float = 0.5, n_it
         x = x + alpha[:, None,None,None]*p # x = x + alpha*p
         r = r - alpha[:, None,None,None]*d # r = r - alpha*d
 
-        sqnorm_r_new = torch.linalg.norm(r.reshape(r.shape[0], -1), dim=1)**2 #r.norm() ** 2
+        sqnorm_r_new = torch.linalg.norm(r.reshape(r.shape[0], -1), dim=1)**2 
 
         beta = sqnorm_r_new / sqnorm_r_old
         sqnorm_r_old = sqnorm_r_new

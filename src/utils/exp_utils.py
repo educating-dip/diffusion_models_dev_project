@@ -207,7 +207,7 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
         if args.adaptation == 'lora':
             adpt_kwargs = {
             'include_blocks': args.lora_include_blocks, 
-            'r': args.lora_rank
+            'r': int(args.lora_rank)
             }
         _score_model_adpt(score, impl=args.adaptation, adpt_kwargs=adpt_kwargs)
         lloss_fn = lambda x: torch.mean(
