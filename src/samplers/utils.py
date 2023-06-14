@@ -160,23 +160,47 @@ def decomposed_diffusion_sampling_sde_predictor(
 
 def _adapt(
     x: Tensor, 
-    score: nn.Module, 
+    score: OpenAiUNetModel,
     sde: SDE,
+    ray_trafo: callable,
     loss_fn: callable,
-    time_step: Tensor, 
+    time_step: Tensor,
+    rhs: Tensor,
     num_steps: int,
-    lr: float = 1e-3
+    lr: float = 1e-3, 
+    gamma: float = 1e-3, 
+    cg_max_iter: int = 1
     ) -> None:
-    
+
+    assert _has_lora_active(score=score)
     score.eval()
     optim = torch.optim.Adam(score.parameters(), lr=lr)
     for _ in range(num_steps):
         optim.zero_grad()
         s = score(x, time_step)
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=time_step)
+        xhat0 = cg(x=xhat0, ray_trafo=ray_trafo, rhs=rhs, gamma=gamma, n_iter=cg_max_iter)
         loss = loss_fn(x=xhat0)
         loss.backward()
         optim.step()
+
+def _tune_lora_scale(
+        score:OpenAiUNetModel, 
+        scale: float = 1.0
+        ):
+    for _module in score.modules():
+        if _module.__class__.__name__ in ['LoraInjectedLinear', 'LoraInjectedConv2d', 'LoraInjectedConv1d']:
+            _module.scale = scale
+
+def _has_lora(score:OpenAiUNetModel):
+    for _module in score.modules():
+        if _module.__class__.__name__ in ['LoraInjectedLinear', 'LoraInjectedConv2d', 'LoraInjectedConv1d']:
+            return True
+
+def _has_lora_active(score:OpenAiUNetModel):
+    for _module in score.modules():
+        if _module.__class__.__name__ in ['LoraInjectedLinear', 'LoraInjectedConv2d', 'LoraInjectedConv1d']:
+            return _module.scale != 0 
 
 def adapted_ddim_sde_predictor( 
     score: OpenAiUNetModel,
@@ -189,33 +213,38 @@ def adapted_ddim_sde_predictor(
     use_adapt: bool = False,
     datafitscale: Optional[float] = None, # pylint: disable=unused-variable
     use_simplified_eqn: bool = False,
+    ray_trafo: callable = None,
     add_cg: bool = False,
     gamma: float = None,
     cg_kwargs: Dict = None, 
-    ray_trafo: callable = None,
     rhs: Tensor = None
     ) -> Tuple[Tensor, Tensor]:
-
+    
+    torch.autograd.set_detect_anomaly(True)
     t = time_step if not isinstance(time_step, Tuple) else time_step[0]
-    if use_adapt : adapt_fn(x=x, time_step=t)
-    with torch.no_grad():
-        s = score(x, t)
-        xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t)
+    if use_adapt: adapt_fn(x=x, 
+        time_step=time_step, ray_trafo=ray_trafo, rhs=rhs, gamma=gamma, cg_max_iter=1)
 
+    with torch.no_grad():
+        if _has_lora(score=score):
+            _tune_lora_scale(score=score, scale=0)
+        s = score(x, t)
+        if _has_lora(score=score):
+            _tune_lora_scale(score=score, scale=1)
+        xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t)
         if add_cg:
             rhs = xhat0 + gamma*rhs
-            xhat = cg(x=xhat0, ray_trafo=ray_trafo,  rhs=rhs, gamma=gamma, n_iter=cg_kwargs['max_iter'])
+            xhat0 = cg(x=xhat0, ray_trafo=ray_trafo,  rhs=rhs, gamma=gamma, n_iter=cg_kwargs['max_iter'])
+        
+        x = ddim(sde=sde,
+            s=s,
+            xhat=xhat0,
+            time_step=time_step,
+            step_size=step_size,
+            eta=eta, 
+            use_simplified_eqn=use_simplified_eqn, 
+            )
 
-    x = ddim(
-        sde=sde,
-        s=s,
-        xhat=xhat0,
-        time_step=time_step,
-        step_size=step_size,
-        eta=eta, 
-        use_simplified_eqn=use_simplified_eqn, 
-        )
-    
     return x.detach(), xhat0.detach()
 
 def ddim(

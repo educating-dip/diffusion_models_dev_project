@@ -3,10 +3,10 @@ LoRA. Adapted from https://github.com/cloneofsimo/lora/tree/master/lora_diffusio
 """
 import torch 
 import torch.nn as nn 
-from typing import Callable, Dict, List, Optional, Set, Tuple, Type, Union
+from typing import List, Optional, Set, Type
 import itertools
 
-UNET_EXTENDED_TARGET_REPLACE = {"AttentionBlock", "ResBlock"} 
+UNET_EXTENDED_TARGET_REPLACE = {"AttentionBlock", "ResBlock"}
 
 class LoraInjectedLinear(nn.Module):
     def __init__(
@@ -30,12 +30,13 @@ class LoraInjectedLinear(nn.Module):
         nn.init.zeros_(self.lora_up.weight)
 
     def forward(self, input):
-        return (
-            self.linear(input)
-            + self.dropout(self.lora_up(self.selector(self.lora_down(input))))
-            * self.scale
-        )
-
+        if self.scale == 0:
+            return (self.linear(input))
+        else:
+            return (self.linear(input) 
+                    + self.dropout(self.lora_up(self.selector(self.lora_down(input))))
+                    * self.scale)
+         
     def realize_as_lora(self):
         return self.lora_up.weight.data * self.scale, self.lora_down.weight.data
 
@@ -107,11 +108,12 @@ class LoraInjectedConv2d(nn.Module):
         nn.init.zeros_(self.lora_up.weight)
 
     def forward(self, input):
-        return (
-            self.conv(input)
-            + self.dropout(self.lora_up(self.selector(self.lora_down(input))))
-            * self.scale
-        )
+        if self.scale == 0: 
+            return (self.conv(input))
+        else: 
+            return (self.conv(input)
+                + self.dropout(self.lora_up(self.selector(self.lora_down(input))))
+                * self.scale)
 
     def realize_as_lora(self):
         return self.lora_up.weight.data * self.scale, self.lora_down.weight.data
@@ -193,11 +195,13 @@ class LoraInjectedConv1d(nn.Module):
         nn.init.zeros_(self.lora_up.weight)
 
     def forward(self, input):
-        return (
-            self.conv(input)
-            + self.dropout(self.lora_up(self.selector(self.lora_down(input))))
-            * self.scale
-        )
+        if self.scale == 0.:
+            return (self.conv(input))
+        else:    
+            return (self.conv(input)
+                + self.dropout(self.lora_up(self.selector(self.lora_down(input))))
+                * self.scale)
+            
 
     def realize_as_lora(self):
         return self.lora_up.weight.data * self.scale, self.lora_down.weight.data

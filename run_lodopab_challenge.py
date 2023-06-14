@@ -10,10 +10,7 @@ import os
 import time
 from pathlib import Path
 
-from src import (get_standard_sde, PSNR, SSIM, get_standard_dataset, LoDoPabTrafo,  
-	get_standard_score, get_standard_sampler, LoDoPabChallenge, get_standard_path) 
-
-# python run_lodopab_challenge.py --method dds --num_steps 100 --gamma 10.0 --eta 0.60 --sde ddpm --cg_iter 5
+from src import (get_standard_sde, PSNR, SSIM, LoDoPabTrafo, get_standard_score, get_standard_sampler, LoDoPabChallenge) 
 
 parser = argparse.ArgumentParser(description='conditional sampling')
 parser.add_argument('--method',  default='dds', choices=['naive', 'dps', 'dds'])
@@ -75,11 +72,6 @@ def coordinator(args):
 		
 		recon = sampler.sample(logg_kwargs=logg_kwargs,logging=False)
 		recon = torch.clamp(recon, 0, 1)
-		#torch.save(		{'recon': recon.cpu().squeeze(), 'ground_truth': ground_truth.cpu().squeeze()}, 
-		#	str(save_root / f'recon_{i}_info.pt')	)
-		
-		#im = Image.fromarray(recon.cpu().squeeze().numpy()*255.).convert("L")
-		#im.save(str(save_root / f'recon_{i}.png'))
 
 		print(recon.shape, ground_truth.shape)
 		print(f'reconstruction of sample {i}'	)
