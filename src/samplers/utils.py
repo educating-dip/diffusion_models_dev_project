@@ -156,7 +156,7 @@ def decomposed_diffusion_sampling_sde_predictor(
             use_simplified_eqn=use_simplified_eqn,
             )
 
-    return x.detach(), xhat.detach()
+    return x.detach(), xhat0.detach()
 
 def _adapt(
     x: Tensor, 
