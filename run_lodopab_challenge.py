@@ -15,13 +15,13 @@ from src import (get_standard_sde, PSNR, SSIM, LoDoPabTrafo, get_standard_score,
 parser = argparse.ArgumentParser(description='conditional sampling')
 parser.add_argument('--method',  default='dds', choices=['naive', 'dps', 'dds'])
 parser.add_argument('--add_corrector_step', action='store_true')
-parser.add_argument('--num_steps', default=1000)
+parser.add_argument('--num_steps', default=100)
 parser.add_argument('--penalty', default=1, help='reg. penalty used for ``naive'' and ``dps'' only.')
-parser.add_argument('--gamma', default=0.01, help='reg. used for ``dds''.')
-parser.add_argument('--eta', default=0.15, help='reg. used for ``dds'' weighting stochastic and deterministic noise.')
+parser.add_argument('--gamma', default=20., help='reg. used for ``dds''.')
+parser.add_argument('--eta', default=0.4, help='reg. used for ``dds'' weighting stochastic and deterministic noise.')
 parser.add_argument('--pct_chain_elapsed', default=0,  help='``pct_chain_elapsed'' actives init of chain')
 parser.add_argument('--sde', default='ddpm', choices=['vpsde', 'vesde', 'ddpm'])
-parser.add_argument('--cg_iter', default=5)
+parser.add_argument('--cg_iter', default=4)
 
 def coordinator(args):
 	load_path = os.path.join("/localdata/AlexanderDenker/score_based_baseline/challenge/LoDoPabCT/ddpm/version_02")
