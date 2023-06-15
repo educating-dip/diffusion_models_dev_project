@@ -4,18 +4,96 @@ import torch
 import functools
 import yaml
 
+import argparse
 from math import ceil
 from pathlib import Path
 from .sde import VESDE, VPSDE, DDPM, _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES
 from .ema import ExponentialMovingAverage
-from ..third_party_models import OpenAiUNetModel
+from ..third_party_models import OpenAiUNetModel, UNetModel
 from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDataset, 
     get_disk_dist_ellipses_dataset, get_one_ellipses_dataset, get_walnut_data)
 from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
 from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, 
     chain_simple_init, decomposed_diffusion_sampling_sde_predictor, adapted_ddim_sde_predictor, tv_loss, _adapt, _score_model_adpt)
 
-def get_standard_score(config, sde, use_ema, load_model=True):
+def get_standard_score(model_type, config, sde, use_ema, load_model=True):
+    if model_type == "openai_unet":
+        score = get_standard_score_openai_unet(config, sde, use_ema, load_model=True)
+    elif model_type == "dds_unet":
+        config_dict = vars(config.model)
+        score = create_model(**config_dict)
+
+        if load_model:
+            score.load_state_dict(torch.load(config.ckpt_path))
+            print(f"Model ckpt loaded from {config.ckpt_path}")
+
+        score.convert_to_fp32()
+        score.dtype = torch.float32
+
+    else:
+        raise NotImplementedError
+
+    return score 
+
+def create_model(
+    image_size,
+    num_channels,
+    num_res_blocks,
+    channel_mult="",
+    learn_sigma=False,
+    class_cond=False,
+    use_checkpoint=False,
+    attention_resolutions="16",
+    num_heads=1,
+    num_head_channels=-1,
+    num_heads_upsample=-1,
+    use_scale_shift_norm=False,
+    dropout=0,
+    resblock_updown=False,
+    use_fp16=False,
+    use_new_attention_order=False,
+    **kwargs
+):
+    if channel_mult == "":
+        if image_size == 512:
+            channel_mult = (0.5, 1, 1, 2, 2, 4, 4)
+        elif image_size == 256 or image_size == 320:
+            channel_mult = (1, 1, 2, 2, 4, 4)
+        elif image_size == 128:
+            channel_mult = (1, 1, 2, 3, 4)
+        elif image_size == 64:
+            channel_mult = (1, 2, 3, 4)
+        else:
+            raise ValueError(f"unsupported image size: {image_size}")
+    else:
+        channel_mult = tuple(int(ch_mult) for ch_mult in channel_mult.split(","))
+
+    attention_ds = []
+    for res in attention_resolutions.split(","):
+        attention_ds.append(image_size // int(res))
+        
+    return UNetModel(
+        image_size=image_size,
+        in_channels=1,
+        model_channels=num_channels,
+        out_channels=(1 if not learn_sigma else 2),
+        num_res_blocks=num_res_blocks,
+        attention_resolutions=tuple(attention_ds),
+        dropout=dropout,
+        channel_mult=channel_mult,
+        num_classes=(NUM_CLASSES if class_cond else None),
+        use_checkpoint=use_checkpoint,
+        use_fp16=use_fp16,
+        num_heads=num_heads,
+        num_head_channels=num_head_channels,
+        num_heads_upsample=num_heads_upsample,
+        use_scale_shift_norm=use_scale_shift_norm,
+        resblock_updown=resblock_updown,
+        use_new_attention_order=use_new_attention_order,
+    )
+
+
+def get_standard_score_openai_unet(config, sde, use_ema, load_model=True):
     if config.model.model_name.lower() == 'OpenAiUNetModel'.lower():
         score = OpenAiUNetModel(
             image_size=config.data.im_size,
@@ -49,6 +127,10 @@ def get_standard_score(config, sde, use_ema, load_model=True):
             score.load_state_dict(torch.load(os.path.join(config.sampling.load_model_from_path, 'model.pt')))
 
     return score
+
+
+
+
 
 def get_standard_sde(config):
 
@@ -188,12 +270,18 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
 def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observation=None, device=None):
 
     if args.method.lower() == 'dds':
+
+        try:
+            eps = config.sampling.eps 
+        except AttributeError:
+            eps = 0.
+
         sample_kwargs = {
             'num_steps': int(args.num_steps),
             'batch_size': config.sampling.batch_size,
             'start_time_step': 0,
             'im_shape': [1, *ray_trafo.im_shape],
-            'eps': config.sampling.eps,
+            'eps': eps,
             'adapt_freq': int(args.adapt_freq), 
             'predictor': {
                 'eta': float(args.eta), 
@@ -232,9 +320,16 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
         sample_kwargs['corrector']['penalty'] = float(args.penalty)
 
     if any([isinstance(sde, classname) for classname in _EPSILON_PRED_CLASSES]):
+        try:
+            travel_length = config.sampling.travel_length
+            travel_repeat = config.sampling.travel_repeat
+        except AttributeError:
+            travel_length = config.time_travel.travel_length
+            travel_repeat = config.time_travel.travel_repeat
+
         sample_kwargs.update({
-            'travel_length': config.sampling.travel_length,
-            'travel_repeat': config.sampling.travel_repeat,
+            'travel_length': travel_length,
+            'travel_repeat': travel_repeat,
             }
         )
 
@@ -349,9 +444,11 @@ def get_standard_train_dataset(config):
     return train_dl
 
 def get_standard_configs(args, base_path="/localdata/AlexanderDenker/score_based_baseline"):
-
-    _sde_classname = args.sde.lower()
-    version = 'version_{:02d}'.format(int(args.version))
+    try:
+        _sde_classname = args.sde.lower()
+        version = 'version_{:02d}'.format(int(args.version))
+    except AttributeError:
+        pass 
     if args.model_learned_on.lower() == 'ellipses': 
         load_path = os.path.join(base_path, 'DiskEllipses', _sde_classname, version)
         print('load model from: ', load_path)
@@ -364,6 +461,13 @@ def get_standard_configs(args, base_path="/localdata/AlexanderDenker/score_based
         with open(os.path.join(load_path, 'report.yaml'), 'r') as stream:
             config = yaml.load(stream, Loader=yaml.UnsafeLoader)
             config.sampling.load_model_from_path = load_path
+    elif args.model_learned_on.lower() == 'aapm':
+        with open(os.path.join("dds_unet_config/vp", "AAPM256.yml"), "r") as f:
+            config = yaml.safe_load(f)
+            config["ckpt_path"] = "/localdata/AlexanderDenker/score_based_baseline/AAPM/vp/AAPM256_1M.pt"
+
+        config = dict2namespace(config)
+
     else:
         raise NotImplementedError
 
@@ -384,7 +488,16 @@ def get_standard_configs(args, base_path="/localdata/AlexanderDenker/score_based
 def get_standard_path(args):
 
     #path = './score_model/outputs/'
-    path = '/localdata/AlexanderDenker/score_model/outputs/'
+    path = '/localdata/AlexanderDenker/score_model_results/outputs/'
     path += args.model_learned_on + '_' + args.dataset
     return Path(os.path.join(path, f'{time.strftime("%d-%m-%Y-%H-%M-%S")}'))
-	
+
+def dict2namespace(config):
+    namespace = argparse.Namespace()
+    for key, value in config.items():
+        if isinstance(value, dict):
+            new_value = dict2namespace(value)
+        else:
+            new_value = value
+        setattr(namespace, key, new_value)
+    return namespace

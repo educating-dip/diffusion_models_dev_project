@@ -185,9 +185,10 @@ def _adapt(
         optim.zero_grad()
         s = score(x, time_step)
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=time_step)
-        _noise_rhs = rhs
+        _noise_rhs = xhat0 + gamma*rhs
         xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=n_iter)
         loss = loss_fn(x=xhat)
+        print(loss)
         loss.backward()
         optim.step()
 
@@ -244,7 +245,7 @@ def adapted_ddim_sde_predictor(
             _tune_lora_scale(score=score, scale=0)
         s = score(x, t)
         if _has_lora(score=score):
-            _tune_lora_scale(score=score, scale=1)     
+            _tune_lora_scale(score=score, scale=1.0)     
         
         x = ddim(sde=sde,
             s=s,

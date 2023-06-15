@@ -11,7 +11,7 @@ parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=
 parser.add_argument('--model_learned_on', default='lodopab', help='model-checkpoint to load', choices=['lodopab', 'ellipses'])
 parser.add_argument('--method',  default='naive', choices=['naive', 'dps', 'dds'])
 parser.add_argument('--version', default=1, help="version of the model")
-
+parser.add_argument('--noise_level', default=0.05, help="rel. additive gaussian noise.")
 parser.add_argument('--add_corrector_step', action='store_true')
 parser.add_argument('--ema', action='store_true')
 parser.add_argument('--num_steps', default=1000)
@@ -31,6 +31,7 @@ parser.add_argument('--gamma', default=0.01, help='reg. used for ``dds''.')
 
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args)
+	dataconfig.data.stddev = float(args.noise_level)
 	save_root = get_standard_path(args)
 	save_root.mkdir(parents=True, exist_ok=True)
 	
@@ -38,7 +39,7 @@ def coordinator(args):
 		torch.manual_seed(config.seed) # for reproducible noise in simulate
 
 	sde = get_standard_sde(config=config)
-	score = get_standard_score(config=config, sde=sde, use_ema=args.ema)
+	score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type="openai_unet")
 	score = score.to(config.device)
 	score.eval()
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
@@ -69,7 +70,7 @@ def coordinator(args):
 				ray_trafo = ray_trafo
 				)
 		recon = sampler.sample(logg_kwargs=logg_kwargs)
-		score = get_standard_score(config=config, sde=sde, use_ema=args.ema)
+		score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type="openai_unet")
 		score = score.to(config.device)
 
 		
