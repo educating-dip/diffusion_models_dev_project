@@ -14,7 +14,7 @@ parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=
 parser.add_argument('--model_learned_on', default='aapm', help='model-checkpoint to load', choices=['lodopab', 'ellipses', 'aapm'])
 parser.add_argument('--method',  default='dds', choices=['naive', 'dps', 'dds'])
 parser.add_argument('--add_corrector_step', action='store_true')
-
+parser.add_argument('--load_path', default="/localdata/AlexanderDenker/score_based_baseline/AAPM/vp/AAPM256_1M.pt")
 parser.add_argument('--num_steps', default=50)
 parser.add_argument('--penalty', default=1, help='reg. penalty used for ``naive'' and ``dps'' only.')
 parser.add_argument('--tv_penalty', default=1e-5, help='reg. used for ``adapatation''.')

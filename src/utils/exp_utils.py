@@ -464,7 +464,7 @@ def get_standard_configs(args, base_path="/localdata/AlexanderDenker/score_based
     elif args.model_learned_on.lower() == 'aapm':
         with open(os.path.join("dds_unet_config/vp", "AAPM256.yml"), "r") as f:
             config = yaml.safe_load(f)
-            config["ckpt_path"] = "/localdata/AlexanderDenker/score_based_baseline/AAPM/vp/AAPM256_1M.pt"
+            config["ckpt_path"] = args.load_path
 
         config = dict2namespace(config)
 
