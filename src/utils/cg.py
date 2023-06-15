@@ -8,7 +8,7 @@ Batched Conjugate Gradient in PyTorch for
 
 Adapted from ODL: https://github.com/odlgroup/odl/blob/master/odl/solvers/iterative/iterative.py 
 """
-def cg(op: callable, x: Tensor, rhs: Tensor, gamma: float = 0.5, n_iter: int = 5) -> Tensor:
+def cg(op: callable, x: Tensor, rhs: Tensor, n_iter: int = 5) -> Tensor:
     # solve (I + gamma A* A) x = rhs
     # starting with x 
 

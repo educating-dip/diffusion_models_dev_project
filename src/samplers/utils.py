@@ -139,7 +139,7 @@ def decomposed_diffusion_sampling_sde_predictor(
         s = score(x, t).detach()
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t) # Tweedy denoising step
         _noise_rhs = xhat0 + gamma*rhs
-        xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, gamma=gamma, n_iter=cg_kwargs['max_iter'])
+        xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
         '''
         It implemets the predictor sampling strategy presented in
             2. @article{song2020denoising,
@@ -172,10 +172,11 @@ def _adapt(
     num_steps: int,
     lr: float = 1e-3, 
     gamma: float = 1e-3, 
+    n_iter: int = 1
     ) -> None:
     
     def op(x):
-        return ray_trafo.trafo_adjoint(ray_trafo(x))
+        return x + gamma*ray_trafo.trafo_adjoint(ray_trafo(x)) 
     
     assert _has_lora_active(score=score)    
     score.eval()
@@ -184,8 +185,9 @@ def _adapt(
         optim.zero_grad()
         s = score(x, time_step)
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=time_step)
-        xhat0 = cg(op=op, x=xhat0, rhs=rhs, gamma=gamma, n_iter=1)
-        loss = loss_fn(x=xhat0)
+        _noise_rhs = rhs
+        xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=n_iter)
+        loss = loss_fn(x=xhat)
         loss.backward()
         optim.step()
 
@@ -226,18 +228,17 @@ def adapted_ddim_sde_predictor(
     ) -> Tuple[Tensor, Tensor]:
     
     t = time_step if not isinstance(time_step, Tuple) else time_step[0]
-    if use_adapt: adapt_fn(x=x, time_step=t, 
-            ray_trafo=ray_trafo, rhs=rhs, gamma=gamma)
+    if use_adapt: adapt_fn(x=x, time_step=t, ray_trafo=ray_trafo, rhs=rhs, gamma=gamma, n_iter=cg_kwargs['max_iter'])
 
-    def op_outer_cg(x):
-        return x + gamma*ray_trafo.trafo_adjoint(ray_trafo(x))
+    def op(x):
+        return x + gamma * ray_trafo.trafo_adjoint(ray_trafo(x))
 
     with torch.no_grad():
         s = score(x, t) # adapted score
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t)
         if add_cg:
-            rhs = xhat0 + gamma*rhs
-            xhat0 = cg(op=op_outer_cg, x=xhat0, rhs=rhs, gamma=gamma, n_iter=cg_kwargs['max_iter'])
+            _noise_rhs = xhat0 + gamma*rhs
+            xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
 
         if _has_lora(score=score):
             _tune_lora_scale(score=score, scale=0)
@@ -247,7 +248,7 @@ def adapted_ddim_sde_predictor(
         
         x = ddim(sde=sde,
             s=s,
-            xhat=xhat0,
+            xhat=xhat if add_cg else xhat0,
             time_step=time_step,
             step_size=step_size,
             eta=eta, 
