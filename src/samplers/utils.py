@@ -136,7 +136,7 @@ def decomposed_diffusion_sampling_sde_predictor(
 
     t = time_step if not isinstance(time_step, Tuple) else time_step[0]
     with torch.no_grad():
-        s = score(x, t).detach()
+        s = score(x, t)
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t) # Tweedy denoising step
         _noise_rhs = xhat0 + gamma*rhs
         xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])

@@ -27,7 +27,11 @@ parser.add_argument('--cg_iter', default=5)
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args)
 	save_root = get_standard_path(args)
+
+	print(save_root)
+
 	save_root.mkdir(parents=True, exist_ok=True)
+
 
 	if config.seed is not None:
 		torch.manual_seed(config.seed) # for reproducible noise in simulate
@@ -37,6 +41,7 @@ def coordinator(args):
 	score = score.to(config.device)
 	score.eval()
 	
+	dataconfig.forward_op.impl = "odl"
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
 	ray_trafo = ray_trafo.to(device=config.device)
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)

@@ -18,7 +18,7 @@ from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_
 
 def get_standard_score(model_type, config, sde, use_ema, load_model=True):
     if model_type == "openai_unet":
-        score = get_standard_score_openai_unet(config, sde, use_ema, load_model=True)
+        score = get_standard_score_openai_unet(config, sde, use_ema, load_model=load_model)
     elif model_type == "dds_unet":
         config_dict = vars(config.model)
         score = create_model(**config_dict)

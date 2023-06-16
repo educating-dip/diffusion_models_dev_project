@@ -26,7 +26,7 @@ def coordinator(args):
 
 	print(config)
 	sde = get_standard_sde(config=config)
-	score = get_standard_score(config=config, sde=sde, use_ema=False, load_model=False)
+	score = get_standard_score(config=config, sde=sde, use_ema=False, load_model=False, model_type="openai_unet")
 
 	print("Number of parameters: ", sum([p.numel() for p in score.parameters()]))
 

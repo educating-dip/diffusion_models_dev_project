@@ -26,6 +26,8 @@ def coordinator(args):
 	score = score.to(config.device)
 	score.eval()
 
+	print(sum([p.numel() for p in score.parameters()]))
+
 	batch_size = 4
 	if any([isinstance(sde, classname) for classname in _SCORE_PRED_CLASSES]):
 		sampler = BaseSampler(
