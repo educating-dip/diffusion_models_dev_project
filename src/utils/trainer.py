@@ -54,11 +54,16 @@ def score_model_simple_trainer(
 			if idx > optim_kwargs['ema_warm_start_steps'] or epoch > 0:
 				ema.update(score.parameters())
 
+		if (epoch % optim_kwargs['save_model_every_n_epoch']) == 0 or (epoch == optim_kwargs['epochs']-1):
+			if epoch == optim_kwargs['epochs']-1:
+				torch.save(score.state_dict(), os.path.join(log_dir, 'model.pt'))
+				torch.save(ema.state_dict(), os.path.join(log_dir, 'ema_model.pt'))
+			else:
+				torch.save(score.state_dict(), os.path.join(log_dir, f'model_{epoch}.pt'))
+				torch.save(ema.state_dict(), os.path.join(log_dir, f'ema_model_{epoch}.pt'))
+			
 		print('Average Loss: {:5f}'.format(avg_loss / num_items))
 		writer.add_scalar('train/mean_loss_per_epoch', avg_loss / num_items, epoch + 1)
-		torch.save(score.state_dict(), os.path.join(log_dir,'model.pt'))
-		torch.save(ema.state_dict(), os.path.join(log_dir, 'ema_model.pt'))
-		
 		if val_kwargs['sample_freq'] > 0:
 			if epoch % val_kwargs['sample_freq']== 0:
 				score.eval()

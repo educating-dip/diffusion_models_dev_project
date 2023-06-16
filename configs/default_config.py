@@ -30,6 +30,7 @@ def get_default_configs(args):
     training.lr = 1e-4
     training.ema_decay = 0.999
     training.ema_warm_start_steps = 400 # only start updating ema after this amount of steps 
+    training.save_model_every_n_epoch = 25
 
     # validation configs
     config.validation = validation = ml_collections.ConfigDict()
