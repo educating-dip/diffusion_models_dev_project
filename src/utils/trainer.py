@@ -107,3 +107,7 @@ def score_model_simple_trainer(
 				x_mean = sampler.sample(logging=False)
 				sample_grid = torchvision.utils.make_grid(x_mean, normalize=True, scale_each=True)
 				writer.add_image('unconditional samples', sample_grid, global_step=epoch)
+
+	# always save last model 
+	torch.save(score.state_dict(), os.path.join(log_dir, 'model.pt'))
+	torch.save(ema.state_dict(), os.path.join(log_dir, 'ema_model.pt'))

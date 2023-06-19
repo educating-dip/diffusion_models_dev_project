@@ -24,7 +24,8 @@ parser.add_argument('--sde', default='ddpm', choices=['vpsde', 'vesde', 'ddpm'])
 parser.add_argument('--cg_iter', default=4)
 
 def coordinator(args):
-	load_path = os.path.join("/localdata/AlexanderDenker/score_based_baseline/challenge/LoDoPabCT/ddpm/version_02")
+	#load_path = os.path.join("/localdata/AlexanderDenker/score_based_baseline/challenge/LoDoPabCT/ddpm/version_02")
+	load_path = "/localdata/AlexanderDenker/score_based_baseline/LoDoPabCT/vesde/version_05"
 	print('load model from: ', load_path)
 	with open(os.path.join(load_path, 'report.yaml'), 'r') as stream:
 		config = yaml.load(stream, Loader=yaml.UnsafeLoader)
@@ -37,16 +38,20 @@ def coordinator(args):
 	dataconfig = get_config(args)
 
 	sde = get_standard_sde(config=config)
-	score = get_standard_score(config=config, sde=sde, use_ema=True)
+	score = get_standard_score(config=config, sde=sde, use_ema=True, model_type="openai_unet")
 	score = score.to(config.device)
 	score.eval()
 	
+	print("Number of Parameters: ", sum([p.numel() for p in score.parameters()]))
+
 	dataset = LoDoPabChallenge()
-	ray_trafo = LoDoPabTrafo().to(device=config.device)
+	ray_trafo = LoDoPabTrafo()#.to(device=config.device)
 
 	path = "/localdata/AlexanderDenker/score_results/lodopab"
 	save_root = Path(os.path.join(path, f'{time.strftime("%d-%m-%Y-%H-%M-%S")}'))
 	save_root.mkdir(parents=True, exist_ok=True)
+
+	config.sampling.batch_size = 1
 
 	psnr_list = [] 
 	ssim_list = []
@@ -54,10 +59,16 @@ def coordinator(args):
 	print("num images to test: ", dataconfig.data.validation.num_images)
 	for i, data_sample in enumerate(islice(dataset.lodopab_test, dataconfig.data.validation.num_images)):
 		observation, ground_truth = data_sample
-		ground_truth = ground_truth.to(device=config.device)
-		observation = observation.to(device=config.device)
-		filtbackproj = ray_trafo.fbp(observation)
-		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 10,
+		ground_truth = ground_truth.to(device=config.device).unsqueeze(0)
+		ground_truth = torch.repeat_interleave(ground_truth, config.sampling.batch_size, dim=0)
+
+		observation = observation.to(device=config.device).unsqueeze(0)
+		observation = torch.repeat_interleave(observation, config.sampling.batch_size, dim=0)
+
+		filtbackproj = ray_trafo.fbp(observation).unsqueeze(0)
+		#filtbackproj = torch.repeat_interleave(filtbackproj, config.sampling.batch_size, dim=0)
+
+		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 5,
 			'sample_num':i, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
 		sampler = get_standard_sampler(
 			args=args,
@@ -69,32 +80,44 @@ def coordinator(args):
 			observation=observation,
 			device=config.device
 			)
-		
 		recon = sampler.sample(logg_kwargs=logg_kwargs,logging=False)
 		recon = torch.clamp(recon, 0, 1)
 
 		print(recon.shape, ground_truth.shape)
 		print(f'reconstruction of sample {i}'	)
-		psnr = PSNR(recon[0, 0, :, :].cpu().numpy(), ground_truth[0, :, :].cpu().numpy())
-		ssim = SSIM(recon[0, 0, :, :].cpu().numpy(), ground_truth[0, :, :].cpu().numpy())	
-		psnr_list.append(psnr)
-		ssim_list.append(ssim)
+		psnr = PSNR(recon[0, 0, :, :].cpu().numpy(), ground_truth[0, 0,:, :].cpu().numpy())
+		ssim = SSIM(recon[0, 0, :, :].cpu().numpy(), ground_truth[0, 0,:, :].cpu().numpy())	
+		#psnr_list.append(psnr)
+		#ssim_list.append(ssim)
 		print('PSNR:', psnr)
 		print('SSIM:', ssim)
+
+		# PSNR of mean
+		recon_mean = torch.mean(recon, dim=0)
+
+		psnr = PSNR(recon_mean[0, :, :].cpu().numpy(), ground_truth[0, 0,:, :].cpu().numpy())
+		ssim = SSIM(recon_mean[0, :, :].cpu().numpy(), ground_truth[0, 0,:, :].cpu().numpy())	
+		psnr_list.append(psnr)
+		ssim_list.append(ssim)
+		print('PSNR (mean):', psnr)
+		print('SSIM (mean):', ssim)
+
+		#if i < 5:
+		#	im = Image.fromarray(recon.cpu().squeeze().numpy()*255.).convert("L")
+		#	im.save(str(save_root / f'recon_{i}.png'))
 		
-		"""
 		fig, (ax1, ax2, ax3) = plt.subplots(1,3)
-		ax1.imshow(ground_truth[0,:,:].detach().cpu())
+		ax1.imshow(ground_truth[0,0,:,:].detach().cpu())
 		ax1.axis("off")
 		ax1.set_title("Ground truth")
 		ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu())
 		ax2.axis("off")
 		ax2.set_title(args.method)
-		ax3.imshow(filtbackproj[0,:,:].detach().cpu())
+		ax3.imshow(filtbackproj[0,0,:,:].detach().cpu())
 		ax3.axis("off")
 		ax3.set_title("FBP")
 		plt.show() 
-		"""
+		
 
 	report = {}
 	report.update(dict(dataconfig.items()))

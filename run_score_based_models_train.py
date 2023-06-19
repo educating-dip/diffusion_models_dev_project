@@ -68,7 +68,7 @@ def coordinator(args):
 					'ema_warm_start_steps': config.training.ema_warm_start_steps,
 					'log_freq': config.training.log_freq,
 					'ema_decay': config.training.ema_decay, 
-					'save_model_every_n_epoch': config.save_model_every_n_epoch
+					'save_model_every_n_epoch': config.training.save_model_every_n_epoch
 				},
 			val_kwargs={
 					'batch_size': config.validation.batch_size,

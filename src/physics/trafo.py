@@ -91,7 +91,7 @@ class LoDoPabTrafo(BaseRayTrafo):
 
 		self.ray_trafo_op_fun = TorchRayTrafoParallel2DModule(ray_trafo_op)#.to("cuda") #ray_trafo_op_fun
 		self.ray_trafo_adjoint_op_fun = TorchRayTrafoParallel2DAdjointModule(ray_trafo_op)#.to("cuda") #ray_trafo_adjoint_op_fun
-		self.fbp_fun = TorchRayTrafoParallel2DAdjointModule(ray_trafo_op)#.to("cuda") #fbp_fun
+		self.fbp_fun = fbp_fun #TorchRayTrafoParallel2DAdjointModule(ray_trafo_op)#.to("cuda") #fbp_fun
 
 	@property
 	def angles(self) -> np.ndarray:
