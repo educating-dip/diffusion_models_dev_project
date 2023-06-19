@@ -1,6 +1,8 @@
 """
 Adapted from Dival
 """
+import numpy as np 
+import torch 
 from torch import Tensor 
 from torch.utils.data import DataLoader
 from dival import get_standard_dataset
@@ -101,3 +103,49 @@ class LoDoPabChallenge():
             ) -> DataLoader:
         return DataLoader(self.lodopab_test, 
             batch_size=batch_size, num_workers=num_data_loader_workers, pin_memory=True, shuffle=False)
+
+
+
+class SubsetLoDoPab():
+    def __init__(self, 
+        impl: str = 'astra_cuda',
+        im_size: int = 362,
+        ) -> None:
+
+        self.impl = impl
+        dataset = get_standard_dataset('lodopab', impl=self.impl)
+        self.ray_trafo = dataset.ray_trafo
+        self.im_size = im_size
+        self.use_transform = self.im_size != 362
+        def transform(sample: Tensor) -> Tensor:
+            x = sample[1]
+            if self.use_transform:
+                x = interpolate(
+                        x.unsqueeze(0), 
+                        size=(self.im_size, self.im_size), 
+                        mode='bilinear'
+                    ).squeeze().unsqueeze(0) 
+
+            return x
+
+        lodopab_val = dataset.create_torch_dataset(part='validation',
+            reshape=((1,) + dataset.space[0].shape,
+            (1,) + dataset.space[1].shape), transform=transform)
+        
+        rng = np.random.default_rng(seed=0)
+        indices = rng.choice(len(lodopab_val), 100, replace=False)
+
+        self.lodopab_subset = torch.utils.data.Subset(lodopab_val, indices)
+
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt 
+
+    dataset = SubsetLoDoPab() 
+
+    print(dataset.lodopab_subset[0].shape)
+    fig, axes = plt.subplots(1,5)
+
+    for idx, ax in enumerate(axes.ravel()):
+        ax.imshow(dataset.lodopab_subset[idx][0,:,:])
+    plt.show()

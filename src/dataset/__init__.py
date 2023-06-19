@@ -4,3 +4,4 @@ from .walnut import get_walnut_2d_observation, get_walnut_2d_ground_truth, get_w
 from .walnut_utils import get_single_slice_ray_trafo, get_single_slice_ray_trafo_matrix
 from .lodopab import LoDoPabDatasetFromDival, LoDoPabChallenge
 from .mayo_data import MayoDataset
+from .aapm import AAPMDataset

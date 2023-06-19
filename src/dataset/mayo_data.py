@@ -49,7 +49,7 @@ class MayoDataset(Dataset):
 
         rng = np.random.default_rng(self.seed)
         # like lodopab preprocessing
-        array = dcm_dataset.pixel_array[75:-75,75:-75].astype(np.float32).T
+        array = dcm_dataset.pixel_array[75:-75,75:-75].astype(np.float32).T # default 362x362
         array *= dcm_dataset.RescaleSlope
         array += dcm_dataset.RescaleIntercept
         array += rng.uniform(0., 1., size=array.shape)
