@@ -13,6 +13,7 @@ def get_config(args):
   data = config.data
   data.name = 'Walnut'
   data.im_size = 501
+  data.new_shape = (256, 256)
   data.data_path = '/localdata/jleuschn/Walnuts/'  # insert "/path/to/Walnuts/", which should contain a sub-folder "Walnut1/" extracted from Walnut1.zip, download from: https://zenodo.org/record/2686726/files/Walnut1.zip?download=1
   data.walnut_id = 1
   data.fold = 'test'

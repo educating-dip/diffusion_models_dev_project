@@ -31,6 +31,13 @@ def _convert_to_torch_matrix(matrix):
         matrix = torch.from_numpy(matrix)
     return matrix
 
+class ReSize: 
+    def __init__(self, shape: Tuple[int, int], mode: str = 'nearest-exact'):
+        self.shape = shape
+        self.mode = mode
+
+    def __call__(self, x, shape: Optional[Tuple[int, int]]=None) -> Tensor:
+        return torch.nn.functional.interpolate(x, size=self.shape if shape is None else shape, mode=self.mode)
 
 class MatmulRayTrafo(BaseRayTrafo):
     """
@@ -45,7 +52,9 @@ class MatmulRayTrafo(BaseRayTrafo):
             obs_shape: Union[Tuple[int, int], Tuple[int, int, int]],
             matrix: Union[Tensor, scipy.sparse.spmatrix, np.ndarray],
             fbp_fun: Optional[Callable[[Tensor], Tensor]] = None,
-            angles: Optional[ArrayLike] = None):
+            angles: Optional[ArrayLike] = None, 
+            new_shape: Optional[Tuple[int, int]] = None
+            ):
         """
         Parameters
         ----------
@@ -70,6 +79,10 @@ class MatmulRayTrafo(BaseRayTrafo):
         # register for automatic moving to device (access: self.matrix)
         self.register_buffer('matrix', matrix, persistent=False)
 
+        if new_shape is not None:
+            # assert isinstance(new_size, Tuple)
+            self.resize = ReSize(shape=new_shape)
+
         if matrix.is_sparse:
             # cannot call .T on sparse torch tensor, so create new tensor and
             # register it for automatic moving to device (access: self.matrix_t)
@@ -92,10 +105,14 @@ class MatmulRayTrafo(BaseRayTrafo):
         raise ValueError('`angles` was not set for `MatmulRayTrafo`')
 
     def trafo_flat(self, x: Tensor) -> Tensor:
+        if self.resize is not None:
+           x = self.resize(x.view((x.shape[-1], 1, *self.resize.shape)), shape=self.im_shape)
+           x = x.view(np.prod(self.im_shape), x.shape[0])
         if self.matrix.is_sparse:
             observation = torch.sparse.mm(self.matrix, x)
         else:
             observation = torch.matmul(self.matrix, x)
+        
         return observation
 
     def trafo_adjoint_flat(self, observation: Tensor) -> Tensor:
@@ -103,10 +120,17 @@ class MatmulRayTrafo(BaseRayTrafo):
             x = torch.sparse.mm(self.matrix_t, observation)
         else:
             x = torch.matmul(self.matrix.T, observation)
+        if self.resize is not None:
+            x = self.resize(x.view((observation.shape[-1], 1, *self.im_shape)))
+            x = x.view(np.prod(self.resize.shape), observation.shape[-1])
         return x
 
     def fbp(self, observation: Tensor) -> Tensor:
-        return self.fbp_fun(observation)
+        fbp = self.fbp_fun(observation)
+        if self.resize is not None:
+            _fbp = fbp.view((*observation.shape[:2], *self.im_shape))
+            fbp = self.resize(_fbp)
+        return fbp
 
     trafo = BaseRayTrafo._trafo_via_trafo_flat
     trafo_adjoint = BaseRayTrafo._trafo_adjoint_via_trafo_adjoint_flat

@@ -1,14 +1,18 @@
-import os
+import yaml
 import argparse
 import torch 
 import matplotlib.pyplot as plt
+import numpy as  np
+
 from itertools import islice
 from src import (get_standard_sde, PSNR, SSIM, get_standard_dataset, get_data_from_ground_truth, get_standard_ray_trafo,  
 	get_standard_score, get_standard_configs, get_standard_path, get_standard_adapted_sampler) 
 
 parser = argparse.ArgumentParser(description='conditional sampling')
 parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=['walnut', 'lodopab', 'ellipses', 'mayo'])
-parser.add_argument('--model_learned_on', default='lodopab', help='model-checkpoint to load', choices=['lodopab', 'ellipses'])
+parser.add_argument('--model', default='openai_unet', help='select unet arch.', choices=['dds_unet', 'openai_unet'])
+parser.add_argument('--base_path', default='/localdata/AlexanderDenker/score_based_baseline', help='path to model configs')
+parser.add_argument('--model_learned_on', default='lodopab', help='model-checkpoint to load', choices=['lodopab', 'ellipses', 'aapm'])
 parser.add_argument('--method',  default='naive', choices=['naive', 'dps', 'dds'])
 parser.add_argument('--version', default=1, help="version of the model")
 parser.add_argument('--noise_level', default=0.05, help="rel. additive gaussian noise.")
@@ -27,10 +31,11 @@ parser.add_argument('--lora_rank', default=4, help='lora kwargs impl. of rank')
 parser.add_argument('--add_cg', action='store_true', help="do DDS steps after adaptation.")
 parser.add_argument('--cg_iter', default=5, help="Number of CG steps for DDS update.")
 parser.add_argument('--gamma', default=0.01, help='reg. used for ``dds''.')
+parser.add_argument('--load_path', help='path to ddpm model.')
 
 
 def coordinator(args):
-	config, dataconfig = get_standard_configs(args)
+	config, dataconfig = get_standard_configs(args, base_path=args.base_path)
 	dataconfig.data.stddev = float(args.noise_level)
 	save_root = get_standard_path(args)
 	save_root.mkdir(parents=True, exist_ok=True)
@@ -39,13 +44,14 @@ def coordinator(args):
 		torch.manual_seed(config.seed) # for reproducible noise in simulate
 
 	sde = get_standard_sde(config=config)
-	score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type="openai_unet")
+	score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type=args.model)
 	score = score.to(config.device)
 	score.eval()
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
 	ray_trafo = ray_trafo.to(device=config.device)
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
 
+	_psnr, _ssim = [], []
 	for i, data_sample in enumerate(islice(dataset, config.data.validation.num_images)):
 		if len(data_sample) == 3:
 			observation, ground_truth, filtbackproj = data_sample
@@ -70,24 +76,35 @@ def coordinator(args):
 				ray_trafo = ray_trafo
 				)
 		recon = sampler.sample(logg_kwargs=logg_kwargs)
-		score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type="openai_unet")
+		score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type=args.model)
 		score = score.to(config.device)
 
-		
 		print(f'reconstruction of sample {i}')
 		psnr = PSNR(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
-		ssim = SSIM(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())	
+		ssim = SSIM(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
+		_psnr.append(psnr)
+		_ssim.append(ssim)
 		print('PSNR:', psnr)
 		print('SSIM:', ssim)
-		
-		fig, (ax1, ax2) = plt.subplots(1,2)
+
+		_, (ax1, ax2) = plt.subplots(1,2)
 		ax1.imshow(ground_truth[0,0,:,:].detach().cpu())
-		ax1.axis("off")
-		ax1.set_title("Ground truth")
+		ax1.axis('off')
+		ax1.set_title('Ground truth')
 		ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu())
-		ax2.axis("off")
-		ax2.set_title("Adaptation Sampling")
-		plt.show() 
+		ax2.axis('off')
+		ax2.set_title('Adaptation Sampling')
+		plt.savefig(f'diag_smpl_{i}.png') 
+		
+		report = {}
+		report.update(dict(dataconfig.items()))
+		report.update(vars(args))
+		report["PSNR"] = np.mean(_psnr)
+		report["SSIM"] = np.mean(_ssim)
+
+		with open(save_root / 'report.yaml', 'w') as file:
+			yaml.dump(report, file)
+
 
 if __name__ == '__main__':
 	args = parser.parse_args()

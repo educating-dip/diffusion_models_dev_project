@@ -2,7 +2,7 @@
 From https://github.com/educating-dip/bayes_dip/blob/main/bayes_dip/data/trafo/walnut_2d_ray_trafo.py.
 Provides the (pseudo) 2D ray transform for the walnut data.
 """
-from typing import Optional
+from typing import Optional, Union, Tuple
 from functools import partial
 import torch
 import numpy as np
@@ -27,7 +27,9 @@ def get_walnut_2d_ray_trafo(
         data_path: str, matrix_path: Optional[str] = None,
         walnut_id: int = 1, orbit_id: int = 2,
         angular_sub_sampling: int = 1,
-        proj_col_sub_sampling: int = 1) -> MatmulRayTrafo:
+        proj_col_sub_sampling: int = 1, 
+        new_shape: Optional[Tuple[int, int]] = None
+        ) -> MatmulRayTrafo:
     """
     Return a :class:`bayes_dip.data.MatmulRayTrafo` with the matrix
     representation of the walnut 2D ray transform.
@@ -74,7 +76,7 @@ def get_walnut_2d_ray_trafo(
     fbp_fun = partial(_walnut_2d_fdk, walnut_ray_trafo=walnut_ray_trafo)
 
     ray_trafo = MatmulRayTrafo(im_shape, obs_shape, matrix,
-            fbp_fun=fbp_fun, angles=None)
+            fbp_fun=fbp_fun, angles=None, new_shape=new_shape)
 
     # expose index information via attribute
     ray_trafo.inds_in_flat_projs_per_angle = (

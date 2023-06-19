@@ -74,8 +74,9 @@ class BaseRayTrafo(nn.Module, ABC):
     # sub-classes use this function for trafo() if trafo_flat() is implemented
     def _trafo_via_trafo_flat(self, x: Tensor) -> Tensor:
         batch_dim, channel_dim = x.shape[:2]
+        _im_shape = self.im_shape if not hasattr(self, 'resize') else self.resize.shape
         x_flat = x.reshape(
-                batch_dim * channel_dim, np.prod(self.im_shape)).T
+                batch_dim * channel_dim, np.prod(_im_shape)).T
         observation_flat = self.trafo_flat(x_flat)
         return observation_flat.T.reshape(batch_dim, channel_dim, *self.obs_shape)
 
@@ -101,8 +102,9 @@ class BaseRayTrafo(nn.Module, ABC):
     # sub-classes use this function for trafo_flat() if trafo() is implemented
     def _trafo_flat_via_trafo(self, x: Tensor) -> Tensor:
         batch_dim = x.shape[1]
+        _im_shape = self.im_shape if not hasattr(self, 'resize') else self.resize.shape
         x_reshaped = x.T.reshape(
-                1, batch_dim, *self.im_shape)
+                1, batch_dim, *_im_shape)
         observation = self.trafo(x_reshaped)
         return observation.reshape(batch_dim, np.prod(self.obs_shape)).T
 
@@ -140,7 +142,8 @@ class BaseRayTrafo(nn.Module, ABC):
         observation_flat = observation.reshape(
                 batch_dim * channel_dim, np.prod(self.obs_shape)).T
         x_flat = self.trafo_adjoint_flat(observation_flat)
-        return x_flat.T.reshape(batch_dim, channel_dim, *self.im_shape)
+        _im_shape = self.im_shape if not hasattr(self, 'resize') else self.resize.shape
+        return x_flat.T.reshape(batch_dim, channel_dim, *_im_shape)
 
     @abstractmethod
     def trafo_adjoint_flat(self, observation: Tensor) -> Tensor:
@@ -170,7 +173,8 @@ class BaseRayTrafo(nn.Module, ABC):
         observation_reshaped = observation.T.reshape(
                 1, batch_dim, *self.obs_shape)
         x = self.trafo_adjoint(observation_reshaped)
-        return x.reshape(batch_dim, np.prod(self.im_shape)).T
+        _im_shape = self.im_shape if not hasattr(self, 'resize') else self.resize.shape
+        return x.reshape(batch_dim, np.prod(_im_shape)).T
 
     def fbp(self, observation: Tensor) -> Tensor:
         """

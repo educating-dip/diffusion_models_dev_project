@@ -178,6 +178,8 @@ def get_walnut_data(config, ray_trafo):
         data_path=config.data.data_path,
         walnut_id=config.data.walnut_id, orbit_id=config.forward_op.orbit_id,
         scaling_factor=config.data.scaling_factor).to(device=config.device)
+    if hasattr(ray_trafo, 'resize'):
+        ground_truth = ray_trafo.resize(ground_truth.unsqueeze(0)).squeeze(dim=0)
 
     filtbackproj = ray_trafo.fbp(
         noisy_observation[None].to(device=config.device))[0].to(device=config.device)

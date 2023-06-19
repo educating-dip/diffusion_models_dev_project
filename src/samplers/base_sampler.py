@@ -79,11 +79,11 @@ class BaseSampler:
         
         x = init_x
         i = 0
-        for step in tqdm(__iter__):
-
+        pbar = tqdm(__iter__)
+        for step in pbar:
             ones_vec = torch.ones(self.sample_kwargs['batch_size'], device=self.device)
             if isinstance(step, float): 
-                time_step = ones_vec * step # t, 
+                time_step = ones_vec * step # t,
             elif isinstance(step, Tuple):
                 time_step = (ones_vec * step[0], ones_vec * step[1]) # (t, tminus1)
             else:
@@ -121,13 +121,14 @@ class BaseSampler:
             if logging:
                 if (i - self.sample_kwargs['start_time_step']) % logg_kwargs['num_img_in_log'] == 0:
                     writer.add_image('reco', torchvision.utils.make_grid(x_mean.squeeze(), normalize=True, scale_each=True), i)
-                writer.add_scalar('PSNR', PSNR(x_mean[0, 0].cpu().numpy(), logg_kwargs['ground_truth'][0, 0].cpu().numpy()), i)
-                # to be removed in next commits 
-                print(PSNR(x_mean[0, 0].cpu().numpy(), logg_kwargs['ground_truth'][0, 0].cpu().numpy()))
+                psnr = PSNR(x_mean[0, 0].cpu().numpy(), logg_kwargs['ground_truth'][0, 0].cpu().numpy())
+                writer.add_scalar('PSNR', psnr, i)
+                pbar.set_postfix({'psnr': psnr})
+            i += 1
+
         if logging:
             writer.add_image(
                 'final_reco', torchvision.utils.make_grid(x_mean.squeeze(),
                 normalize=True, scale_each=True), global_step=0)
-        i += 1
 
         return x_mean 

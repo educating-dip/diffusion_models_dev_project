@@ -188,7 +188,6 @@ def _adapt(
         _noise_rhs = xhat0 + gamma*rhs
         xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=n_iter)
         loss = loss_fn(x=xhat)
-        print(loss)
         loss.backward()
         optim.step()
 
