@@ -12,7 +12,7 @@ from .sde import VESDE, VPSDE, DDPM, _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES
 from .ema import ExponentialMovingAverage
 from ..third_party_models import OpenAiUNetModel, UNetModel
 from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDataset, 
-    get_disk_dist_ellipses_dataset, get_one_ellipses_dataset, get_walnut_data)
+    get_disk_dist_ellipses_dataset, get_one_ellipses_dataset, get_walnut_data, AAPMDataset)
 from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
 from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, 
     chain_simple_init, decomposed_diffusion_sampling_sde_predictor, adapted_ddim_sde_predictor, tv_loss, _adapt, _score_model_adpt)
@@ -293,7 +293,7 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
         lloss_fn = lambda x: torch.mean(
             (ray_trafo(x) - observation).pow(2))  + float(args.tv_penalty) * tv_loss(x)
         adapt_fn = functools.partial(
-            _adapt, score=score, sde=sde, loss_fn=lloss_fn, num_steps=int(args.num_optim_step))
+            _adapt, score=score, sde=sde, loss_fn=lloss_fn, num_steps=int(args.num_optim_step), lr=float(args.lr))
         predictor = functools.partial(
         adapted_ddim_sde_predictor, score=score, 
                 sde=sde, 
@@ -395,6 +395,8 @@ def get_standard_dataset(config, ray_trafo=None):
             base_path=config.data.base_path, 
             im_shape=ray_trafo.im_shape
             ) 
+    elif config.data.name.lower() == "aapm":
+        dataset = AAPMDataset(part=config.data.part, base_path=config.data.base_path)
     else:
         raise NotImplementedError
 
@@ -471,6 +473,8 @@ def get_standard_configs(args, base_path):
         from configs.walnut_configs import get_config
     elif args.dataset.lower() == 'mayo': 
         from configs.mayo_configs import get_config
+    elif args.dataset.lower() == 'aapm':
+        from configs.aapm_configs import get_config
     else:
         raise NotImplementedError
     dataconfig = get_config(args)
