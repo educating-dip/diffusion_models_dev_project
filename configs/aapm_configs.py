@@ -17,8 +17,8 @@ def get_config(args):
   data.part = 'val'
 
   data.validation = validation = ml_collections.ConfigDict()
-  data.validation.num_images = 1 
-  data.stddev = 0.01 # relative noise 
+  data.validation.num_images = 10
+  data.stddev = 0.01 
 
   # forward operator
   forward_op = config.forward_op

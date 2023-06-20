@@ -483,8 +483,8 @@ def get_standard_configs(args, base_path):
 
 def get_standard_path(args):
 
-    #path = './score_model/outputs/'
-    path = '/localdata/AlexanderDenker/score_model_results/outputs/'
+    path = './outputs/'
+    # path = '/localdata/AlexanderDenker/score_model_results/outputs/'
     path += args.model_learned_on + '_' + args.dataset
     return Path(os.path.join(path, f'{time.strftime("%d-%m-%Y-%H-%M-%S")}'))
 
