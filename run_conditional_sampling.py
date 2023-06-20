@@ -44,6 +44,8 @@ def coordinator(args):
 
 	_psnr, _ssim = [], []
 	for i, data_sample in enumerate(islice(dataset, config.data.validation.num_images)):
+		if config.seed is not None:
+			torch.manual_seed(config.seed + i)  # for reproducible noise in simulate
 		if len(data_sample) == 3:
 			observation, ground_truth, filtbackproj = data_sample
 			ground_truth = ground_truth.to(device=config.device)
@@ -55,7 +57,7 @@ def coordinator(args):
 				ray_trafo=ray_trafo,
 				white_noise_rel_stddev=dataconfig.data.stddev
 				)
-
+	
 		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 40,
 				'sample_num':i, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj
 			}
@@ -95,7 +97,7 @@ def coordinator(args):
 		ax3.imshow(filtbackproj[0,0,:,:].detach().cpu())
 		ax3.axis('off')
 		ax3.set_title('FBP')
-		plt.savefig(f'diag_smpl_{i}.png') 
+		# plt.savefig(f'diag_smpl_{i}.png') 
 		
 	report = {}
 	report.update(dict(dataconfig.items()))

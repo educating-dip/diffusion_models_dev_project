@@ -53,6 +53,8 @@ def coordinator(args):
 
 	_psnr, _ssim = [], []
 	for i, data_sample in enumerate(islice(dataset, config.data.validation.num_images)):
+		if config.seed is not None:
+			torch.manual_seed(config.seed + i)  # for reproducible noise in simulate
 		if len(data_sample) == 3:
 			observation, ground_truth, filtbackproj = data_sample
 			ground_truth = ground_truth.to(device=config.device)
@@ -96,16 +98,16 @@ def coordinator(args):
 		ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu())
 		ax2.axis('off')
 		ax2.set_title('Adaptation Sampling')
-		plt.savefig(f'diag_smpl_{i}.png') 
+		# plt.savefig(f'diag_smpl_{i}.png') 
 		
-		report = {}
-		report.update(dict(dataconfig.items()))
-		report.update(vars(args))
-		report["PSNR"] = np.mean(_psnr)
-		report["SSIM"] = np.mean(_ssim)
+	report = {}
+	report.update(dict(dataconfig.items()))
+	report.update(vars(args))
+	report["PSNR"] = np.mean(_psnr)
+	report["SSIM"] = np.mean(_ssim)
 
-		with open(save_root / 'report.yaml', 'w') as file:
-			yaml.dump(report, file)
+	with open(save_root / 'report.yaml', 'w') as file:
+		yaml.dump(report, file)
 
 
 if __name__ == '__main__':

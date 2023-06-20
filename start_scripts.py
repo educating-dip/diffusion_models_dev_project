@@ -1,42 +1,72 @@
 
 import os 
-cuda_idx = 2
+cuda_idx = 3
+LOAD_PATH = '/localdata/AlexanderDenker/score_based_baseline/AAPM/vp/AAPM256_1M.pt'
 
+# f = open('aapm_dps_sweep.txt', 'w+')
+# for method in ["dps"]:
+#     for eta in [0.15, 0.85]: 
+#         for gamma in [0.1, 1.0, 10.]:
+#             for num_steps in [50, 75]:
+#                 for num_cg_steps in [1, 2, 5, 10]:
+#                     for sde in ['ddmp']:
+#                         line = f"CUDA_VISIBLE_DEVICES={cuda_idx} python run_conditional_sampling.py --model_learned_on=aapm --model dds_unet --dataset=aapm --eta={eta} --method={method} --ema --num_steps={num_steps} --sde={sde} --load_path={LOAD_PATH}"
 
-"""
-for penalty in [750., 1000., 2000.]:
-    for smpl_start_prc in [0]:
-        for num_steps in [200]:
-            os.system(f"CUDA_VISIBLE_DEVICES={cuda_idx} python main_conditional_sampling.py --dataset {dataset} --penalty {penalty} \
-                        --smpl_mthd {smpl_mthd} --smpl_start_prc {smpl_start_prc} --ema --num_steps {num_steps}")
-"""
+#                         f.write(line)
+#                         f.write('\n')
 
-"""
-for method in ["naive"]:
-    for penalty in [75.,80.,85.,90.]:
-        for num_steps in [150, 300, 600]:
-            for sde in ["vesde", "vpsde"]:
-                os.system(f"CUDA_VISIBLE_DEVICES={cuda_idx} python run_conditional_sampling.py --model_learned_on=lodopab \
-                        --dataset=walnut --penalty={penalty} \
-                        --method=naive --ema --num_steps={num_steps} --sde={sde} --version=1")
-"""
+f = open('aapm_dds_sweep.txt', 'w+')
+for method in ['dds']:
+    for eta in [0.15, 0.85]: 
+        for gamma in [0.1, 1.0, 10.]:
+            for num_steps in [50, 75]:
+                for num_cg_steps in [1, 2, 5, 10]:
+                    for sde in ['ddpm']:
+                        line = f"CUDA_VISIBLE_DEVICES={cuda_idx} python /home/jleuschn/riccardo/diffusion_models_dev_project/run_conditional_sampling.py --model_learned_on=aapm --model dds_unet --dataset=aapm --eta={eta} --gamma={gamma} --method={method} --ema --num_steps={num_steps} --cg_iter={num_cg_steps} --sde={sde} --load_path={LOAD_PATH}"
+                        
+                        f.write(line)
+                        f.write(' && ')
 
-for method in ["dds"]:
-    for eta in [0.15, 0.5, 0.85]: #[0.15, 0.5, 0.85]:
-        for gamma in [0.05, 0.1, 0.25, 0.85, 1.0, 2.0, 10.]: #[0.001, 0.1, 0.5, 0.8, 0.9, 0.99]:
-            for num_steps in [50, 75]: #[25, 50, 75, 100]:
-                for sde in ["vesde", "vpsde"]:
-                    os.system(f"CUDA_VISIBLE_DEVICES={cuda_idx} python run_conditional_sampling.py --model_learned_on=lodopab \
-                            --dataset=walnut --eta={eta} --gamma={gamma} \
-                            --method={method} --ema --num_steps={num_steps} --cg_iter=6 --sde={sde} --version=1")
+f = open('walnut_dds_sweep.txt', 'w+')
+for method in ['dds']:
+    for eta in [0.15, 0.85]: 
+        for gamma in [0.1, 1.0, 10.]:
+            for num_steps in [50, 75]:
+                for num_cg_steps in [1, 2, 5, 10]:
+                    for sde in ['ddpm']:
+                        line = f"CUDA_VISIBLE_DEVICES={cuda_idx} python /home/jleuschn/riccardo/diffusion_models_dev_project/run_conditional_sampling.py --model_learned_on=aapm --model dds_unet --dataset=walnut --eta={eta} --gamma={gamma} --method={method} --ema --num_steps={num_steps} --cg_iter={num_cg_steps} --sde={sde} --load_path={LOAD_PATH} "
+                        
+                        f.write(line)
+                        f.write(' && ')
 
+num_cg_steps = 1
+lora_rank = 4
+f = open('aapm_lora_sweep.txt', 'w+')
+for method in ['dds']:
+    for sde in ['ddpm']:
+        for eta in [0.85]: 
+            for gamma in [1]:
+                for lr in [1e-3, 1e-4]: 
+                    for num_steps in [50]:
+                        for num_optim_step in [1, 3, 5, 10]:
+                            for tvP in [1e-5, 1e-6, 1e-7]:
+                                    line = f"CUDA_VISIBLE_DEVICES={cuda_idx} python /home/jleuschn/riccardo/diffusion_models_dev_project/run_adapted_sampling.py --model_learned_on=aapm --model dds_unet --dataset=aapm --eta={eta} --gamma={gamma} --method={method} --ema --num_steps={num_steps} --cg_iter={num_cg_steps} --sde={sde} --load_path={LOAD_PATH} --tv_penalty {tvP} --adapt_freq 1 --num_optim_step {num_optim_step}  --lora_rank={lora_rank} --lr={lr} --add_cg --gamma={gamma} --cg_iter={num_cg_steps} "
 
-"""
-for method in ["dps"]:
-    for penalty in [0.005, 0.008, 0.02, 0.1, 0.5, 2., 5.]:
-        for num_steps in [50, 200, 400]:
-            for sde in ["vesde", "vpsde"]:
-                os.system(f"CUDA_VISIBLE_DEVICES={cuda_idx} python run_conditional_sampling.py --model_learned_on=lodopab \
-                        --dataset=walnut --penalty={penalty} \
-                        --method=dps --ema --num_steps={num_steps} --sde={sde} --version=1")
-"""
+                                    f.write(line)
+                                    f.write(' && ')
+
+num_cg_steps = 1
+lora_rank = 4
+f = open('walnut_lora_sweep.txt', 'w+')
+for method in ['dds']:
+    for sde in ['ddpm']:
+        for eta in [0.85]: 
+            for gamma in [1.0]:
+                for lr in [1e-3, 1e-4]: 
+                    for num_steps in [50]:
+                        for num_optim_step in [1, 3, 5, 10]:
+                            for tvP in [1e-5, 1e-6, 1e-7]:
+                                    line = f"CUDA_VISIBLE_DEVICES={cuda_idx} python /home/jleuschn/riccardo/diffusion_models_dev_project/run_adapted_sampling.py --model_learned_on=aapm --model dds_unet --dataset=walnut --eta={eta} --gamma={gamma} --method={method} --ema --num_steps={num_steps} --cg_iter={num_cg_steps} --sde={sde} --load_path={LOAD_PATH} --tv_penalty {tvP} --adapt_freq 1 --num_optim_step {num_optim_step}  --lora_rank={lora_rank} --lr={lr} --add_cg --gamma={gamma} --cg_iter={num_cg_steps} "
+
+                                    f.write(line)
+                                    f.write(' && ')
