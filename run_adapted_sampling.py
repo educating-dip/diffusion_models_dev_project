@@ -3,6 +3,7 @@ import argparse
 import torch 
 import matplotlib.pyplot as plt
 import numpy as  np
+from PIL import Image
 
 from itertools import islice
 from src import (get_standard_sde, PSNR, SSIM, get_standard_dataset, get_data_from_ground_truth, get_standard_ray_trafo,  
@@ -79,6 +80,11 @@ def coordinator(args):
 				)
 		recon = sampler.sample(logg_kwargs=logg_kwargs, logging=True)
 		recon = torch.clamp(recon, 0)
+		torch.save(		{'recon': recon.cpu().squeeze(), 'ground_truth': ground_truth.cpu().squeeze()}, 
+		str(save_root / f'recon_{i}_info.pt')	)
+		im = Image.fromarray(recon.cpu().squeeze().numpy()*255.).convert("L")
+		im.save(str(save_root / f'recon_{i}.png'))
+
 		
 		score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type=args.model)
 		score = score.to(config.device)
@@ -103,8 +109,8 @@ def coordinator(args):
 	report = {}
 	report.update(dict(dataconfig.items()))
 	report.update(vars(args))
-	report["PSNR"] = np.mean(_psnr)
-	report["SSIM"] = np.mean(_ssim)
+	report["PSNR"] = float(np.mean(_psnr))
+	report["SSIM"] = float(np.mean(_ssim))
 
 	with open(save_root / 'report.yaml', 'w') as file:
 		yaml.dump(report, file)

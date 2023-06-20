@@ -73,9 +73,9 @@ def coordinator(args):
 			)
 		
 		recon = sampler.sample(logg_kwargs=logg_kwargs)
+		recon = torch.clamp(recon, 0)
 		torch.save(		{'recon': recon.cpu().squeeze(), 'ground_truth': ground_truth.cpu().squeeze()}, 
 			str(save_root / f'recon_{i}_info.pt')	)
-
 		im = Image.fromarray(recon.cpu().squeeze().numpy()*255.).convert("L")
 		im.save(str(save_root / f'recon_{i}.png'))
 
