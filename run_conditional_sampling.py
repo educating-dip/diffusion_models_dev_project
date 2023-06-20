@@ -10,7 +10,7 @@ from src import (get_standard_sde, PSNR, SSIM, get_standard_dataset, get_data_fr
 	get_standard_score, get_standard_sampler, get_standard_configs, get_standard_path) 
 
 parser = argparse.ArgumentParser(description='conditional sampling')
-parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=['walnut', 'lodopab', 'ellipses', 'mayo'])
+parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=['walnut', 'lodopab', 'ellipses', 'mayo', 'aapm'])
 parser.add_argument('--model', default='openai_unet', help='select unet arch.', choices=['dds_unet', 'openai_unet'])
 parser.add_argument('--base_path', default='/localdata/AlexanderDenker/score_based_baseline', help='path to model configs')
 parser.add_argument('--model_learned_on', default='lodopab', help='model-checkpoint to load', choices=['lodopab', 'ellipses', 'aapm'])
@@ -37,10 +37,7 @@ def coordinator(args):
 
 	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type=args.model)
-	score = score.to(config.device)
-	score.eval()
-	
-	dataconfig.forward_op.impl = 'odl' # TODO: STREAMLINE THIS
+	score = score.to(config.device).eval()
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
 	ray_trafo = ray_trafo.to(device=config.device)
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
@@ -60,7 +57,8 @@ def coordinator(args):
 				)
 
 		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 40,
-			'sample_num':i, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
+				'sample_num':i, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj
+			}
 		sampler = get_standard_sampler(
 			args=args,
 			config=config,
@@ -102,8 +100,8 @@ def coordinator(args):
 	report = {}
 	report.update(dict(dataconfig.items()))
 	report.update(vars(args))
-	report['PSNR'] = np.mean(_psnr)
-	report['SSIM'] = np.mean(_psnr)
+	report['PSNR'] = float(np.mean(_psnr))
+	report['SSIM'] = float(np.mean(_ssim))
 
 	with open(save_root / 'report.yaml', 'w') as file:
 		yaml.dump(report, file)
