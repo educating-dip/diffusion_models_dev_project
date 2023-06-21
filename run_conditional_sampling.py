@@ -29,7 +29,8 @@ parser.add_argument('--load_path', help='path to ddpm model.')
 
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args, base_path=args.base_path)
-	save_root = get_standard_path(args)
+	save_root = get_standard_path(args, run_type=args.method)
+	print("save to: ", save_root)
 	save_root.mkdir(parents=True, exist_ok=True)
 
 	if config.seed is not None:
@@ -59,7 +60,7 @@ def coordinator(args):
 				white_noise_rel_stddev=dataconfig.data.stddev
 				)
 
-		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 40,
+		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 5,
 			'sample_num':i, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
 		sampler = get_standard_sampler(
 			args=args,

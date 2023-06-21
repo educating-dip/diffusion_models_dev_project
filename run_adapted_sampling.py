@@ -38,7 +38,7 @@ parser.add_argument('--load_path', help='path to ddpm model.')
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args, base_path=args.base_path)
 	dataconfig.data.stddev = float(args.noise_level)
-	save_root = get_standard_path(args)
+	save_root = get_standard_path(args, run_type="adapt")
 	save_root.mkdir(parents=True, exist_ok=True)
 	
 	if config.seed is not None:
@@ -52,8 +52,9 @@ def coordinator(args):
 	ray_trafo = ray_trafo.to(device=config.device)
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
 
+	dataconfig.data.validation.num_images = len(dataset)
 	_psnr, _ssim = [], []
-	for i, data_sample in enumerate(islice(dataset, config.data.validation.num_images)):
+	for i, data_sample in enumerate(islice(dataset, dataconfig.data.validation.num_images)):
 		if len(data_sample) == 3:
 			observation, ground_truth, filtbackproj = data_sample
 			ground_truth = ground_truth.to(device=config.device)
@@ -99,14 +100,17 @@ def coordinator(args):
 		ax2.set_title('Adaptation Sampling')
 		plt.savefig(f'diag_smpl_{i}.png') 
 		
-		report = {}
-		report.update(dict(dataconfig.items()))
-		report.update(vars(args))
-		report["PSNR"] = np.mean(_psnr)
-		report["SSIM"] = np.mean(_ssim)
+	report = {}
+	report.update(dict(dataconfig.items()))
+	report.update(vars(args))
+	report["PSNR"] = float(np.mean(_psnr))
+	report["SSIM"] = float(np.mean(_ssim))
 
-		with open(save_root / 'report.yaml', 'w') as file:
-			yaml.dump(report, file)
+	print("Mean PSNR: ", np.mean(_psnr))
+	print("Mean SSIM: ", np.mean(_ssim))
+
+	with open(save_root / 'report.yaml', 'w') as file:
+		yaml.dump(report, file)
 
 
 if __name__ == '__main__':

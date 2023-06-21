@@ -481,11 +481,28 @@ def get_standard_configs(args, base_path):
 
     return config, dataconfig
 
-def get_standard_path(args):
+def get_standard_path(args, 
+                    run_type=None, 
+                    path= '/localdata/AlexanderDenker/score_model_results/'):
 
     #path = './score_model/outputs/'
-    path = '/localdata/AlexanderDenker/score_model_results/outputs/'
-    path += args.model_learned_on + '_' + args.dataset
+    if run_type == "adapt":
+        path = os.path.join(path, 
+                        args.model_learned_on + '_' + args.dataset, 
+                        "adapt",
+                        "adaptation=" + args.adapatation, 
+                        "num_steps=" + str(args.steps),
+                        "num_optim_step=" + str(args.num_optim_step),
+                        "tv_penalty" + str(args.tv_penalty))
+    elif run_type == "dds":
+        path = os.path.join(path, 
+                    args.model_learned_on + '_' + args.dataset, 
+                    "dds",
+                    "num_steps=" + str(args.num_steps), 
+                    "cg_iter=" + str(args.cg_iter),
+                    "gamma=" + str(args.gamma))
+    else:
+        path += args.model_learned_on + '_' + args.dataset
     return Path(os.path.join(path, f'{time.strftime("%d-%m-%Y-%H-%M-%S")}'))
 
 def dict2namespace(config):
