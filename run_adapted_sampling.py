@@ -113,12 +113,6 @@ def coordinator(args):
 	report["PSNR"] = float(np.mean(_psnr))
 	report["SSIM"] = float(np.mean(_ssim))
 
-<<<<<<< HEAD
-	print("Mean PSNR: ", np.mean(_psnr))
-	print("Mean SSIM: ", np.mean(_ssim))
-
-=======
->>>>>>> f97bcce23e38471e17a48b9a199d3b2bd7a5520d
 	with open(save_root / 'report.yaml', 'w') as file:
 		yaml.dump(report, file)
 

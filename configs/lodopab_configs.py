@@ -10,7 +10,7 @@ def get_config(args):
   data = config.data
   data.name = 'LoDoPabCT'
   data.im_size = 256
-  data.stddev = 0.01 #0.025#0.05
+  data.stddev = 0.01 
   data.part = "val"
   data.validation = validation = ml_collections.ConfigDict()
 

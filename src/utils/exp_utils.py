@@ -484,17 +484,17 @@ def get_standard_configs(args, base_path):
 
 def get_standard_path(args, 
                     run_type=None, 
-                    path= '/localdata/AlexanderDenker/score_model_results/'):
+                    path=''):
 
-    #path = './score_model/outputs/'
+    path = './outputs/'
     if run_type == "adapt":
         path = os.path.join(path, 
-                        args.model_learned_on + '_' + args.dataset, 
-                        "adapt",
-                        "adaptation=" + args.adapatation, 
-                        "num_steps=" + str(args.steps),
-                        "num_optim_step=" + str(args.num_optim_step),
-                        "tv_penalty" + str(args.tv_penalty))
+                    args.model_learned_on + '_' + args.dataset, 
+                    "adapt",
+                    "adaptation=" + args.adaptation, 
+                    "num_steps=" + str(args.num_steps),
+                    "num_optim_step=" + str(args.num_optim_step),
+                    "tv_penalty" + str(args.tv_penalty))
     elif run_type == "dds":
         path = os.path.join(path, 
                     args.model_learned_on + '_' + args.dataset, 
