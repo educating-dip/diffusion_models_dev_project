@@ -9,14 +9,14 @@ def get_config(args):
   # data
   data = config.data
   data.name = 'LoDoPabCT'
-  data.im_size = 501
-  data.stddev = 0.0 #0.025#0.05
+  data.im_size = 256
+  data.stddev = 0.01 #0.025#0.05
+  data.part = "val"
   data.validation = validation = ml_collections.ConfigDict()
-  validation.num_images = 5
 
   # forward operator
   forward_op = config.forward_op
-  forward_op.num_angles = 200
+  forward_op.num_angles = 60
   forward_op.trafo_name = 'simple_trafo'
   forward_op.impl = 'odl' #'iradon'
 

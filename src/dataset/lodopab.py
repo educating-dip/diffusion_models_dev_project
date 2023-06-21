@@ -7,6 +7,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from dival import get_standard_dataset
 from torch.nn.functional import interpolate
+from torch.utils.data import Dataset
 
 class LoDoPabDatasetFromDival():
     def __init__(self, 
@@ -106,11 +107,14 @@ class LoDoPabChallenge():
 
 
 
-class SubsetLoDoPab():
+class SubsetLoDoPab(Dataset):
     def __init__(self, 
+        part: str, # val, test 
         impl: str = 'astra_cuda',
         im_size: int = 362,
         ) -> None:
+
+        assert part in ['val', 'test']
 
         self.impl = impl
         dataset = get_standard_dataset('lodopab', impl=self.impl)
@@ -133,15 +137,29 @@ class SubsetLoDoPab():
             (1,) + dataset.space[1].shape), transform=transform)
         
         rng = np.random.default_rng(seed=0)
-        indices = rng.choice(len(lodopab_val), 100, replace=False)
+        indices = rng.choice(len(lodopab_val), 110, replace=False)
 
-        self.lodopab_subset = torch.utils.data.Subset(lodopab_val, indices)
+        indices_val = indices[:10]
+        indices_test = indices[10:]
+        if part == "val":
+            self.lodopab_subset = torch.utils.data.Subset(lodopab_val, indices_val)
+        elif part == "test":
+            self.lodopab_subset = torch.utils.data.Subset(lodopab_val, indices_test)
+
+    def __len__(self):
+        return len(self.lodopab_subset)
+
+    def __getitem__(self, idx: int):
+        
+        x = self.lodopab_subset[idx]
+
+        return x
 
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt 
 
-    dataset = SubsetLoDoPab() 
+    dataset = SubsetLoDoPab(part="val", im_size=256) 
 
     print(dataset.lodopab_subset[0].shape)
     fig, axes = plt.subplots(1,5)

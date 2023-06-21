@@ -11,7 +11,7 @@ from pathlib import Path
 from .sde import VESDE, VPSDE, DDPM, _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES
 from .ema import ExponentialMovingAverage
 from ..third_party_models import OpenAiUNetModel, UNetModel
-from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDataset, 
+from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDataset,  SubsetLoDoPab, 
     get_disk_dist_ellipses_dataset, get_one_ellipses_dataset, get_walnut_data, AAPMDataset)
 from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
 from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, 
@@ -387,8 +387,9 @@ def get_standard_dataset(config, ray_trafo=None):
     elif config.data.name.lower() == 'Walnut'.lower():
         dataset = get_walnut_data(config, ray_trafo)
     elif config.data.name.lower() == 'LoDoPabCT'.lower():
-        dataset = LoDoPabDatasetFromDival(im_size=config.data.im_size)
-        dataset = dataset.get_testloader(batch_size=1, num_data_loader_workers=0)
+        dataset = SubsetLoDoPab(part=config.data.part, im_size=config.data.im_size) 
+        #dataset = LoDoPabDatasetFromDival(im_size=config.data.im_size)
+        #dataset = dataset.get_testloader(batch_size=1, num_data_loader_workers=0)
     elif config.data.name.lower() == 'Mayo'.lower(): 
         dataset = MayoDataset(
             part=config.data.part, 
