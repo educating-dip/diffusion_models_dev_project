@@ -3,6 +3,7 @@
 *.o
 *.so
 *.pyc
+*.txt
 
 # Logs and temporaries #
 ########################

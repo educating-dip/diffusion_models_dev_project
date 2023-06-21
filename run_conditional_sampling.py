@@ -10,7 +10,7 @@ from src import (get_standard_sde, PSNR, SSIM, get_standard_dataset, get_data_fr
 	get_standard_score, get_standard_sampler, get_standard_configs, get_standard_path) 
 
 parser = argparse.ArgumentParser(description='conditional sampling')
-parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=['walnut', 'lodopab', 'ellipses', 'mayo'])
+parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=['walnut', 'lodopab', 'ellipses', 'mayo', 'aapm'])
 parser.add_argument('--model', default='openai_unet', help='select unet arch.', choices=['dds_unet', 'openai_unet'])
 parser.add_argument('--base_path', default='/localdata/AlexanderDenker/score_based_baseline', help='path to model configs')
 parser.add_argument('--model_learned_on', default='lodopab', help='model-checkpoint to load', choices=['lodopab', 'ellipses', 'aapm'])
@@ -38,16 +38,15 @@ def coordinator(args):
 
 	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type=args.model)
-	score = score.to(config.device)
-	score.eval()
-	
-	dataconfig.forward_op.impl = 'odl' # TODO: STREAMLINE THIS
+	score = score.to(config.device).eval()
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
 	ray_trafo = ray_trafo.to(device=config.device)
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
 
 	_psnr, _ssim = [], []
 	for i, data_sample in enumerate(islice(dataset, config.data.validation.num_images)):
+		if config.seed is not None:
+			torch.manual_seed(config.seed + i)  # for reproducible noise in simulate
 		if len(data_sample) == 3:
 			observation, ground_truth, filtbackproj = data_sample
 			ground_truth = ground_truth.to(device=config.device)
@@ -74,9 +73,9 @@ def coordinator(args):
 			)
 		
 		recon = sampler.sample(logg_kwargs=logg_kwargs)
+		recon = torch.clamp(recon, 0)
 		torch.save(		{'recon': recon.cpu().squeeze(), 'ground_truth': ground_truth.cpu().squeeze()}, 
 			str(save_root / f'recon_{i}_info.pt')	)
-
 		im = Image.fromarray(recon.cpu().squeeze().numpy()*255.).convert("L")
 		im.save(str(save_root / f'recon_{i}.png'))
 
@@ -98,13 +97,13 @@ def coordinator(args):
 		ax3.imshow(filtbackproj[0,0,:,:].detach().cpu())
 		ax3.axis('off')
 		ax3.set_title('FBP')
-		plt.savefig(f'diag_smpl_{i}.png') 
+		# plt.savefig(f'diag_smpl_{i}.png') 
 		
 	report = {}
 	report.update(dict(dataconfig.items()))
 	report.update(vars(args))
-	report['PSNR'] = np.mean(_psnr)
-	report['SSIM'] = np.mean(_psnr)
+	report['PSNR'] = float(np.mean(_psnr))
+	report['SSIM'] = float(np.mean(_ssim))
 
 	with open(save_root / 'report.yaml', 'w') as file:
 		yaml.dump(report, file)

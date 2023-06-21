@@ -1,6 +1,6 @@
 data:
     validation: 
-        num_images: 1
+        num_images: 10
 model:
     type: 'openai'
     in_channels: 1

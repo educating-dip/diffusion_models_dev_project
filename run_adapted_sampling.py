@@ -3,6 +3,7 @@ import argparse
 import torch 
 import matplotlib.pyplot as plt
 import numpy as  np
+from PIL import Image
 
 from itertools import islice
 from src import (get_standard_sde, PSNR, SSIM, get_standard_dataset, get_data_from_ground_truth, get_standard_ray_trafo,  
@@ -27,10 +28,10 @@ parser.add_argument('--adaptation', default='lora', choices=['decoder', 'full', 
 parser.add_argument('--num_optim_step', default=10, help='num. of optimization steps taken per sampl. step')
 parser.add_argument('--adapt_freq', default=1, help='freq. of adaptation step in sampl.')
 parser.add_argument('--lora_include_blocks', default=['input_blocks','middle_block','output_blocks','out'], nargs='+', help='lora kwargs impl. of arch. blocks included')
-parser.add_argument('--lr', default=1e-3, help="learning rate for adaptation")
+parser.add_argument('--lr', default=1e-3, help='learning rate for adaptation')
 parser.add_argument('--lora_rank', default=4, help='lora kwargs impl. of rank')
-parser.add_argument('--add_cg', action='store_true', help="do DDS steps after adaptation.")
-parser.add_argument('--cg_iter', default=5, help="Number of CG steps for DDS update.")
+parser.add_argument('--add_cg', action='store_true', help='do DDS steps after adaptation.')
+parser.add_argument('--cg_iter', default=5, help='Number of CG steps for DDS update.')
 parser.add_argument('--gamma', default=0.01, help='reg. used for ``dds''.')
 parser.add_argument('--load_path', help='path to ddpm model.')
 
@@ -46,8 +47,7 @@ def coordinator(args):
 
 	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type=args.model)
-	score = score.to(config.device)
-	score.eval()
+	score = score.to(config.device).eval()
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
 	ray_trafo = ray_trafo.to(device=config.device)
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
@@ -55,6 +55,8 @@ def coordinator(args):
 	dataconfig.data.validation.num_images = len(dataset)
 	_psnr, _ssim = [], []
 	for i, data_sample in enumerate(islice(dataset, dataconfig.data.validation.num_images)):
+		if config.seed is not None:
+			torch.manual_seed(config.seed + i)  # for reproducible noise in simulate
 		if len(data_sample) == 3:
 			observation, ground_truth, filtbackproj = data_sample
 			ground_truth = ground_truth.to(device=config.device)
@@ -77,8 +79,13 @@ def coordinator(args):
 				observation = observation,
 				ray_trafo = ray_trafo
 				)
-		recon = sampler.sample(logg_kwargs=logg_kwargs, logging=False)
+		recon = sampler.sample(logg_kwargs=logg_kwargs, logging=True)
 		recon = torch.clamp(recon, 0)
+		torch.save(		{'recon': recon.cpu().squeeze(), 'ground_truth': ground_truth.cpu().squeeze()}, 
+		str(save_root / f'recon_{i}_info.pt')	)
+		im = Image.fromarray(recon.cpu().squeeze().numpy()*255.).convert("L")
+		im.save(str(save_root / f'recon_{i}.png'))
+
 		
 		score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type=args.model)
 		score = score.to(config.device)
@@ -98,7 +105,7 @@ def coordinator(args):
 		ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu())
 		ax2.axis('off')
 		ax2.set_title('Adaptation Sampling')
-		plt.savefig(f'diag_smpl_{i}.png') 
+		# plt.savefig(f'diag_smpl_{i}.png') 
 		
 	report = {}
 	report.update(dict(dataconfig.items()))
@@ -106,9 +113,12 @@ def coordinator(args):
 	report["PSNR"] = float(np.mean(_psnr))
 	report["SSIM"] = float(np.mean(_ssim))
 
+<<<<<<< HEAD
 	print("Mean PSNR: ", np.mean(_psnr))
 	print("Mean SSIM: ", np.mean(_ssim))
 
+=======
+>>>>>>> f97bcce23e38471e17a48b9a199d3b2bd7a5520d
 	with open(save_root / 'report.yaml', 'w') as file:
 		yaml.dump(report, file)
 
