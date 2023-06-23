@@ -14,10 +14,10 @@ def get_config(args):
   data.name = 'AAPM'
   data.im_size = 256
   data.base_path = '/localdata/AlexanderDenker/score_based_baseline/AAPM/256_sorted/256_sorted/L067'
-  data.part = 'val'
+  data.part = 'test'
 
   data.validation = validation = ml_collections.ConfigDict()
-  data.validation.num_images = 10
+  data.validation.num_images = 56
   data.stddev = 0.01 
 
   # forward operator

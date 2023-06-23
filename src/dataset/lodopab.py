@@ -106,10 +106,9 @@ class LoDoPabChallenge():
             batch_size=batch_size, num_workers=num_data_loader_workers, pin_memory=True, shuffle=False)
 
 
-
 class SubsetLoDoPab(Dataset):
     def __init__(self, 
-        part: str, # val, test 
+        part: str,
         impl: str = 'astra_cuda',
         im_size: int = 362,
         ) -> None:
@@ -121,6 +120,9 @@ class SubsetLoDoPab(Dataset):
         self.ray_trafo = dataset.ray_trafo
         self.im_size = im_size
         self.use_transform = self.im_size != 362
+        self.use_scale = True
+        self.use_rotate = True
+        
         def transform(sample: Tensor) -> Tensor:
             x = sample[1]
             if self.use_transform:
@@ -128,9 +130,13 @@ class SubsetLoDoPab(Dataset):
                         x.unsqueeze(0), 
                         size=(self.im_size, self.im_size), 
                         mode='bilinear'
-                    ).squeeze().unsqueeze(0) 
+                    )
+            if self.use_scale:
+                x = (x - x.min()) / (x.max() - x.min())
+            if self.use_rotate:
+                x = torch.rot90(x, k=1, dims=(-1, -2))
 
-            return x
+            return x.squeeze().unsqueeze(0)
 
         lodopab_val = dataset.create_torch_dataset(part='validation',
             reshape=((1,) + dataset.space[0].shape,
@@ -154,16 +160,3 @@ class SubsetLoDoPab(Dataset):
         x = self.lodopab_subset[idx]
 
         return x
-
-
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt 
-
-    dataset = SubsetLoDoPab(part="val", im_size=256) 
-
-    print(dataset.lodopab_subset[0].shape)
-    fig, axes = plt.subplots(1,5)
-
-    for idx, ax in enumerate(axes.ravel()):
-        ax.imshow(dataset.lodopab_subset[idx][0,:,:])
-    plt.show()

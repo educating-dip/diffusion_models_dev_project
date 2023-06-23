@@ -44,7 +44,7 @@ def coordinator(args):
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
 
 	_psnr, _ssim = [], []
-	for i, data_sample in enumerate(islice(dataset, config.data.validation.num_images)):
+	for i, data_sample in enumerate(islice(dataset, dataconfig.data.validation.num_images)):
 		if config.seed is not None:
 			torch.manual_seed(config.seed + i)  # for reproducible noise in simulate
 		if len(data_sample) == 3:

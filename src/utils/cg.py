@@ -15,7 +15,7 @@ def cg(op: callable, x: Tensor, rhs: Tensor, n_iter: int = 5) -> Tensor:
     # batch x 1 x h x w
     r = op(x)
     r = rhs - r
-    p = torch.clone(r)
+    p = r
     d = torch.zeros_like(x)
 
     # Only recalculate norm after update

@@ -11,8 +11,9 @@ def get_config(args):
   data.name = 'LoDoPabCT'
   data.im_size = 256
   data.stddev = 0.01 
-  data.part = "val"
+  data.part = 'test'
   data.validation = validation = ml_collections.ConfigDict()
+  data.validation.num_images = 100
 
   # forward operator
   forward_op = config.forward_op
