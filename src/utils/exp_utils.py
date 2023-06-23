@@ -484,12 +484,19 @@ def get_standard_configs(args, base_path):
 
 def get_standard_path(args, 
                     run_type=None, 
-                    path=''):
+                    path='', 
+                    data_part=None):
 
     path = './outputs/'
+    #path = "/localdata/AlexanderDenker/new_run/outputs"
+    path = os.path.join(path, 
+                    args.model_learned_on + '_' + args.dataset)
+
+    if data_part is not None:
+        path = os.path.join(path, data_part)
+    
     if run_type == "adapt":
-        path = os.path.join(path, 
-                    args.model_learned_on + '_' + args.dataset, 
+        path = os.path.join(path,
                     "adapt",
                     "adaptation=" + args.adaptation, 
                     "num_steps=" + str(args.num_steps),
@@ -497,13 +504,13 @@ def get_standard_path(args,
                     "tv_penalty" + str(args.tv_penalty))
     elif run_type == "dds":
         path = os.path.join(path, 
-                    args.model_learned_on + '_' + args.dataset, 
                     "dds",
                     "num_steps=" + str(args.num_steps), 
                     "cg_iter=" + str(args.cg_iter),
                     "gamma=" + str(args.gamma))
     else:
-        path += args.model_learned_on + '_' + args.dataset
+        pass 
+
     return Path(os.path.join(path, f'{time.strftime("%d-%m-%Y-%H-%M-%S")}'))
 
 def dict2namespace(config):
