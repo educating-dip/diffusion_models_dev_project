@@ -59,7 +59,7 @@ def coordinator(args):
 				white_noise_rel_stddev=dataconfig.data.stddev
 				)
 
-		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 5,
+		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 1,
 			'sample_num':i, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
 		sampler = get_standard_sampler(
 			args=args,
