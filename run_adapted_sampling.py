@@ -31,10 +31,10 @@ parser.add_argument('--lora_include_blocks', default=['input_blocks','middle_blo
 parser.add_argument('--lr', default=1e-3, help='learning rate for adaptation')
 parser.add_argument('--lora_rank', default=4, help='lora kwargs impl. of rank')
 parser.add_argument('--add_cg', action='store_true', help='do DDS steps after adaptation.')
-parser.add_argument('--cg_iter', default=5, help='Number of CG steps for DDS update.')
+parser.add_argument('--cg_iter', default=1, help='Number of CG steps for DDS update.')
 parser.add_argument('--gamma', default=0.01, help='reg. used for ``dds''.')
 parser.add_argument('--load_path', help='path to ddpm model.')
-
+parser.add_argument('--dc_type', default="cg", choices=["cg", "gd"], help="use cg/gd in adaptation")
 
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args, base_path=args.base_path)
@@ -54,8 +54,8 @@ def coordinator(args):
 	score = score.to(config.device).eval()
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
 	ray_trafo = ray_trafo.to(device=config.device)
-	from odl.operator.oputils import power_method_opnorm
-
+	
+	#from odl.operator.oputils import power_method_opnorm
 	#print("OPERATOR NORM: ", power_method_opnorm(ray_trafo.ray_trafo_op_fun.operator))
 
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)

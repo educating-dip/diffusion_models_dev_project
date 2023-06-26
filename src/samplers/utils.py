@@ -182,7 +182,8 @@ def _adapt(
     num_steps: int,
     lr: float = 1e-3, 
     gamma: float = 1e-3, 
-    n_iter: int = 1
+    n_iter: int = 1,
+    dc_type: str = "cg"
     ) -> None:
     
     def op(x):
@@ -204,13 +205,17 @@ def _adapt(
             #xhat = xhat.permute(0, 3, 1, 2)
 
         else:
-            #_noise_rhs = xhat0 + gamma*rhs
-            #xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=n_iter)
-            xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
+            if dc_type == "cg":
+                _noise_rhs = xhat0 + gamma*rhs
+                xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=n_iter)
+            elif dc_type == "dc":
+                xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
+            else:
+                raise NotImplementedError
             #xhat = xhat0
         loss = loss_fn(x=xhat)
         loss.backward()
-        print(loss)
+
         optim.step()
 
 def _tune_lora_scale(
@@ -244,6 +249,7 @@ def adapted_ddim_sde_predictor(
     use_simplified_eqn: bool = False,
     ray_trafo: callable = None,
     add_cg: bool = False,
+    dc_type: str = None,
     gamma: float = None,
     cg_kwargs: Dict = None, 
     rhs: Tensor = None
@@ -267,15 +273,14 @@ def adapted_ddim_sde_predictor(
                 xhat = torch.squeeze(torch.view_as_real(xhat), dim=1)
                 xhat = xhat.permute(0, 3, 1, 2)
             else:
-                #_noise_rhs = xhat0 + gamma*rhs
-                #xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=n_iter)
-                xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
+                if dc_type == "cg":
+                    _noise_rhs = xhat0 + gamma*rhs
+                    xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
+                elif dc_type == "gd":
+                    xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
+                else:
+                    raise NotImplementedError
                 #xhat = xhat0
-
-
-            #xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
-            #_noise_rhs = xhat0 + gamma*rhs
-            #xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
 
         if _has_lora(score=score):
             _tune_lora_scale(score=score, scale=0)

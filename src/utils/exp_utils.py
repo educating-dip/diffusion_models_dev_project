@@ -305,6 +305,7 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
                 sde=sde, 
                 adapt_fn=adapt_fn, 
                 add_cg=args.add_cg,
+                dc_type=args.dc_type,
                 rhs=ray_trafo.trafo_adjoint(observation),
                 cg_kwargs={'max_iter': int(args.cg_iter)}
             )
