@@ -133,13 +133,23 @@ def decomposed_diffusion_sampling_sde_predictor(
     '''
     def op(x):
         return x + gamma*ray_trafo.trafo_adjoint(ray_trafo(x))
+        #return ray_trafo.trafo_adjoint(ray_trafo(x)) 
 
     t = time_step if not isinstance(time_step, Tuple) else time_step[0]
     with torch.no_grad():
         s = score(x, t)
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t) # Tweedy denoising step
-        _noise_rhs = xhat0 + gamma*rhs
-        xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
+        if xhat0.shape[1] == 2:
+            permute_xhat0 = xhat0.permute(0,2,3,1).contiguous()
+            permute_xhat0 = torch.view_as_complex(permute_xhat0)
+            _noise_rhs = permute_xhat0 + gamma*rhs
+
+            xhat = cg(op=op, x=permute_xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
+            xhat = torch.squeeze(torch.view_as_real(xhat), dim=1)
+            xhat = xhat.permute(0, 3, 1, 2)
+        else:
+            _noise_rhs = xhat0 + gamma*rhs
+            xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
         '''
         It implemets the predictor sampling strategy presented in
             2. @article{song2020denoising,
@@ -185,10 +195,22 @@ def _adapt(
         optim.zero_grad()
         s = score(x, time_step)
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=time_step)
-        _noise_rhs = xhat0 + gamma*rhs
-        xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=n_iter)
+        if xhat0.shape[1] == 2:
+            permute_xhat0 = xhat0.permute(0,2,3,1).contiguous()
+            permute_xhat0 = torch.view_as_complex(permute_xhat0)
+            xhat = permute_xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(permute_xhat0)) + gamma*rhs
+            #print(xhat.dtype, xhat.shape)
+            #xhat = torch.squeeze(torch.view_as_real(xhat), dim=1)
+            #xhat = xhat.permute(0, 3, 1, 2)
+
+        else:
+            #_noise_rhs = xhat0 + gamma*rhs
+            #xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=n_iter)
+            xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
+            #xhat = xhat0
         loss = loss_fn(x=xhat)
         loss.backward()
+        print(loss)
         optim.step()
 
 def _tune_lora_scale(
@@ -236,9 +258,24 @@ def adapted_ddim_sde_predictor(
     with torch.no_grad():
         s = score(x, t) # adapted score
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t)
+        #xhat = xhat0
         if add_cg:
-            _noise_rhs = xhat0 + gamma*rhs
-            xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
+            if xhat0.shape[1] == 2:
+                permute_xhat0 = xhat0.permute(0,2,3,1).contiguous()
+                permute_xhat0 = torch.view_as_complex(permute_xhat0)
+                xhat = permute_xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(permute_xhat0)) + gamma*rhs
+                xhat = torch.squeeze(torch.view_as_real(xhat), dim=1)
+                xhat = xhat.permute(0, 3, 1, 2)
+            else:
+                #_noise_rhs = xhat0 + gamma*rhs
+                #xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=n_iter)
+                xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
+                #xhat = xhat0
+
+
+            #xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
+            #_noise_rhs = xhat0 + gamma*rhs
+            #xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
 
         if _has_lora(score=score):
             _tune_lora_scale(score=score, scale=0)

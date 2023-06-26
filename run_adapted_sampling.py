@@ -38,8 +38,12 @@ parser.add_argument('--load_path', help='path to ddpm model.')
 
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args, base_path=args.base_path)
-	dataconfig.data.stddev = float(args.noise_level)
-	save_root = get_standard_path(args, run_type="adapt")
+	#dataconfig.data.stddev = float(args.noise_level)
+	try:
+		save_root = get_standard_path(args, run_type="adapt", data_part=dataconfig.data.part)
+	except AttributeError:
+		save_root = get_standard_path(args, run_type="adapt")
+
 	save_root.mkdir(parents=True, exist_ok=True)
 	
 	if config.seed is not None:
@@ -50,6 +54,10 @@ def coordinator(args):
 	score = score.to(config.device).eval()
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
 	ray_trafo = ray_trafo.to(device=config.device)
+	from odl.operator.oputils import power_method_opnorm
+
+	#print("OPERATOR NORM: ", power_method_opnorm(ray_trafo.ray_trafo_op_fun.operator))
+
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
 
 	dataconfig.data.validation.num_images = len(dataset)

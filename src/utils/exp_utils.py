@@ -35,6 +35,8 @@ def get_standard_score(model_type, config, sde, use_ema, load_model=True):
 def create_model(
     image_size,
     num_channels,
+    in_channels, 
+    out_channels,
     num_res_blocks,
     channel_mult='',
     learn_sigma=False,
@@ -70,9 +72,9 @@ def create_model(
         
     return UNetModel(
         image_size=image_size,
-        in_channels=1,
+        in_channels=in_channels,
         model_channels=num_channels,
-        out_channels=(1 if not learn_sigma else 2),
+        out_channels=out_channels, #(1 if not learn_sigma else 2),
         num_res_blocks=num_res_blocks,
         attention_resolutions=tuple(attention_ds),
         dropout=dropout,
@@ -228,7 +230,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
                 'num_steps': int(args.num_steps),
                 'batch_size': config.sampling.batch_size,
                 'start_time_step': ceil(float(args.pct_chain_elapsed) * int(args.num_steps)),
-                'im_shape': [1, *_shape],
+                'im_shape': [config.model.in_channels, *_shape],
                 'eps': config.sampling.eps,
                 'travel_length': config.sampling.travel_length,
                 'travel_repeat': config.sampling.travel_repeat, 
@@ -260,7 +262,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
     
     return sampler
 
-def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observation=None, device=None):
+def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observation=None, device=None, complex_y=False):
 
     if args.method.lower() == 'dds':
         try:
@@ -272,7 +274,7 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
             'num_steps': int(args.num_steps),
             'batch_size': config.sampling.batch_size,
             'start_time_step': 0,
-            'im_shape': [1, *_shape],
+            'im_shape': [config.model.in_channels, *_shape],
             'eps': eps,
             'adapt_freq': int(args.adapt_freq), 
             'predictor': {
@@ -290,7 +292,11 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
             'r': int(args.lora_rank)
             }
         _score_model_adpt(score, impl=args.adaptation, adpt_kwargs=adpt_kwargs)
-        lloss_fn = lambda x: torch.mean(
+        if complex_y:
+            lloss_fn = lambda x: torch.mean(
+            torch.view_as_real(ray_trafo(x) - observation).pow(2))  + float(args.tv_penalty) * tv_loss(torch.abs(x))
+        else:
+            lloss_fn = lambda x: torch.mean(
             (ray_trafo(x) - observation).pow(2))  + float(args.tv_penalty) * tv_loss(x)
         adapt_fn = functools.partial(
             _adapt, score=score, sde=sde, loss_fn=lloss_fn, num_steps=int(args.num_optim_step), lr=float(args.lr))
@@ -487,8 +493,8 @@ def get_standard_path(args,
                     path='', 
                     data_part=None):
 
-    path = './outputs/'
-    #path = "/localdata/AlexanderDenker/new_run/outputs"
+    #path = './outputs/'
+    path = "/localdata/AlexanderDenker/new_run/outputs"
     path = os.path.join(path, 
                     args.model_learned_on + '_' + args.dataset)
 

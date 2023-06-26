@@ -10,7 +10,7 @@ import os
 import time
 from pathlib import Path
 
-from src import (get_standard_sde, PSNR, SSIM, LoDoPabTrafo, get_standard_score, get_standard_sampler, LoDoPabChallenge) 
+from src import (get_standard_sde, ExponentialMovingAverage, PSNR, SSIM, LoDoPabTrafo, get_standard_score, get_standard_sampler, LoDoPabChallenge) 
 
 parser = argparse.ArgumentParser(description='conditional sampling')
 parser.add_argument('--method',  default='dds', choices=['naive', 'dps', 'dds'])
@@ -22,14 +22,14 @@ parser.add_argument('--eta', default=0.4, help='reg. used for ``dds'' weighting 
 parser.add_argument('--pct_chain_elapsed', default=0,  help='``pct_chain_elapsed'' actives init of chain')
 parser.add_argument('--sde', default='ddpm', choices=['vpsde', 'vesde', 'ddpm'])
 parser.add_argument('--cg_iter', default=4)
+parser.add_argument("--ema", action="store_true")
 
 def coordinator(args):
 	#load_path = os.path.join("/localdata/AlexanderDenker/score_based_baseline/challenge/LoDoPabCT/ddpm/version_02")
-	load_path = "/localdata/AlexanderDenker/score_based_baseline/LoDoPabCT/vesde/version_05"
+	load_path = "/localdata/AlexanderDenker/score_based_baseline/LoDoPabCT/ddpm/version_07"
 	print('load model from: ', load_path)
 	with open(os.path.join(load_path, 'report.yaml'), 'r') as stream:
 		config = yaml.load(stream, Loader=yaml.UnsafeLoader)
-		config.sampling.load_model_from_path = load_path
 
 	if config.seed is not None:
 		torch.manual_seed(config.seed) # for reproducible noise in simulate
@@ -38,7 +38,14 @@ def coordinator(args):
 	dataconfig = get_config(args)
 
 	sde = get_standard_sde(config=config)
-	score = get_standard_score(config=config, sde=sde, use_ema=True, model_type="openai_unet")
+	score = get_standard_score(config=config, sde=sde, 
+			use_ema=args.ema, model_type="openai_unet", load_model=False)
+	if args.ema:
+		ema = ExponentialMovingAverage(score.parameters(), decay=0.999)
+		ema.load_state_dict(torch.load(os.path.join(load_path, "ema_model_75.pt")))
+		ema.copy_to(score.parameters())	
+	else:
+		score.load_state_dict(torch.load(os.path.join(load_path, "model_75.pt")))
 	score = score.to(config.device)
 	score.eval()
 	
@@ -47,7 +54,7 @@ def coordinator(args):
 	dataset = LoDoPabChallenge()
 	ray_trafo = LoDoPabTrafo()#.to(device=config.device)
 
-	path = "/localdata/AlexanderDenker/score_results/lodopab"
+	path = "/localdata/AlexanderDenker/score_results_lodopab"
 	save_root = Path(os.path.join(path, f'{time.strftime("%d-%m-%Y-%H-%M-%S")}'))
 	save_root.mkdir(parents=True, exist_ok=True)
 
@@ -65,8 +72,8 @@ def coordinator(args):
 		observation = observation.to(device=config.device).unsqueeze(0)
 		observation = torch.repeat_interleave(observation, config.sampling.batch_size, dim=0)
 
-		filtbackproj = ray_trafo.fbp(observation).unsqueeze(0)
-		#filtbackproj = torch.repeat_interleave(filtbackproj, config.sampling.batch_size, dim=0)
+		filtbackproj = ray_trafo.fbp(observation)
+		filtbackproj = torch.repeat_interleave(filtbackproj, config.sampling.batch_size, dim=0)
 
 		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 5,
 			'sample_num':i, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
@@ -102,10 +109,10 @@ def coordinator(args):
 		print('PSNR (mean):', psnr)
 		print('SSIM (mean):', ssim)
 
-		#if i < 5:
-		#	im = Image.fromarray(recon.cpu().squeeze().numpy()*255.).convert("L")
-		#	im.save(str(save_root / f'recon_{i}.png'))
-		
+		if i < 5:
+			im = Image.fromarray(recon.cpu().squeeze().numpy()*255.).convert("L")
+			im.save(str(save_root / f'recon_{i}.png'))
+		"""
 		fig, (ax1, ax2, ax3) = plt.subplots(1,3)
 		ax1.imshow(ground_truth[0,0,:,:].detach().cpu())
 		ax1.axis("off")
@@ -117,7 +124,7 @@ def coordinator(args):
 		ax3.axis("off")
 		ax3.set_title("FBP")
 		plt.show() 
-		
+		"""
 
 	report = {}
 	report.update(dict(dataconfig.items()))
