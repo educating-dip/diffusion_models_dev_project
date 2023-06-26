@@ -88,16 +88,16 @@ def coordinator(args):
 		_ssim.append(ssim)
 
 		_, (ax1, ax2, ax3) = plt.subplots(1,3)
-		ax1.imshow(ground_truth[0,0,:,:].detach().cpu())
+		ax1.imshow(ground_truth[0,0,:,:].detach().cpu(), cmap='gray')
 		ax1.axis('off')
 		ax1.set_title('Ground truth')
-		ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu())
+		ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu(), cmap='gray')
 		ax2.axis('off')
 		ax2.set_title(args.method)
-		ax3.imshow(filtbackproj[0,0,:,:].detach().cpu())
+		ax3.imshow(filtbackproj[0,0,:,:].detach().cpu(), cmap='gray')
 		ax3.axis('off')
 		ax3.set_title('FBP')
-		# plt.savefig(f'diag_smpl_{i}.png') 
+		plt.savefig(str(save_root/f'info_{i}.png')) 
 		
 	report = {}
 	report.update(dict(dataconfig.items()))

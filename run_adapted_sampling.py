@@ -69,7 +69,7 @@ def coordinator(args):
 				white_noise_rel_stddev=dataconfig.data.stddev
 				)
 
-		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 10, 'sample_num': 1, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
+		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 5, 'sample_num': i, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
 		sampler = get_standard_adapted_sampler(
 				args=args,
 				config=config,
@@ -98,14 +98,17 @@ def coordinator(args):
 		print('PSNR:', psnr)
 		print('SSIM:', ssim)
 
-		_, (ax1, ax2) = plt.subplots(1,2)
-		ax1.imshow(ground_truth[0,0,:,:].detach().cpu())
+		_, (ax1, ax2, ax3) = plt.subplots(1,3)
+		ax1.imshow(ground_truth[0,0,:,:].detach().cpu(), cmap='gray')
 		ax1.axis('off')
 		ax1.set_title('Ground truth')
-		ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu())
+		ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu(), cmap='gray')
 		ax2.axis('off')
 		ax2.set_title('Adaptation Sampling')
-		# plt.savefig(f'diag_smpl_{i}.png') 
+		ax3.imshow(filtbackproj[0,0,:,:].detach().cpu(), cmap='gray')
+		ax3.axis('off')
+		ax3.set_title('FBP')
+		plt.savefig(str(save_root/f'info_{i}.png')) 
 		
 	report = {}
 	report.update(dict(dataconfig.items()))
