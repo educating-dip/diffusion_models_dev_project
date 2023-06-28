@@ -123,7 +123,8 @@ class MulticoilMRI(BaseRayTrafo):
     
 def CG(A_fn, b_cg, x, n_inner=10, eps=1e-8):
     r = b_cg - A_fn(x)
-    p = r.clone()
+    # p = r.clone()
+    p = r
     rs_old = torch.matmul(r.view(1, -1), r.view(1, -1).T)
     for _ in range(n_inner):
         Ap = A_fn(p)
