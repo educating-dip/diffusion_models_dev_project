@@ -214,6 +214,7 @@ def _adapt(
                 raise NotImplementedError
             #xhat = xhat0
         loss = loss_fn(x=xhat)
+        print(loss.item())
         loss.backward()
 
         optim.step()

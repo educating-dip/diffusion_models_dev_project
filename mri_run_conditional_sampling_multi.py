@@ -29,25 +29,6 @@ parser.add_argument('--cg_iter', default=5)
 parser.add_argument('--load_path', help='path to ddpm model.')
 parser.add_argument('--base_path', help='path to ddpm model configs.')
 
-"""
-def create_mask(shape, center_fraction=0.08, acceleration = 4):
-
-	num_cols = shape[-2]
-
-	# create the mask
-	num_low_freqs = int(round(num_cols * center_fraction))
-	prob = (num_cols / acceleration - num_low_freqs) / (
-	        num_cols - num_low_freqs
-	)
-	mask = np.random.uniform(size=num_cols) < prob
-	pad = (num_cols - num_low_freqs + 1) // 2
-	mask[pad : pad + num_low_freqs] = True
-
-	mask = np.repeat(mask[:,None].T, shape[-1], axis=0)
-
-	return torch.from_numpy(mask).unsqueeze(0).unsqueeze(0)
-"""
-
 def get_mask(img, size, batch_size, type='gaussian2d', acc_factor=8, center_fraction=0.04, fix=False):
     mux_in = size ** 2
     if type.endswith('2d'):
@@ -173,7 +154,13 @@ def coordinator(args):
 								acc_factor=4, center_fraction=0.08)
 	mask = mask.to(config.device)
 	Ncoil, _, _ = mps.shape
+	
+	resizer = Resize((256,256))
+	mps = resizer(torch.from_numpy(mps))
+
+	print(mps.shape)
 	mps = mps.view(1, Ncoil, 256, 256).to(config.device)
+
 
 	#ray_trafo = SingleCoilMRI(mask)
 
@@ -185,7 +172,6 @@ def coordinator(args):
 	print(x.shape)
 	x_torch = torch.from_numpy(x).unsqueeze(0).unsqueeze(0)
 		
-	resizer = Resize((256,256))
 
 
 	ground_truth = resizer(x_torch)
@@ -225,11 +211,11 @@ def coordinator(args):
 	#im = Image.fromarray(recon.cpu().squeeze().numpy()*255.).convert("L")
 	#im.save(str(save_root / f'recon_{i}.png'))
 
-	#print(f'reconstruction of sample {0}'	)
-	#psnr = PSNR(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
-	#ssim = SSIM(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())	
-	#print('PSNR:', psnr)
-	#print('SSIM:', ssim)
+	print(f'reconstruction of sample {0}'	)
+	psnr = PSNR(recon[0, 0], torch.abs(ground_truth[0, 0]).cpu().numpy())
+	ssim = SSIM(recon[0, 0], torch.abs(ground_truth[0, 0]).cpu().numpy())	
+	print('PSNR:', psnr)
+	print('SSIM:', ssim)
 	#_psnr.append(psnr)
 	#_ssim.append(ssim)
 

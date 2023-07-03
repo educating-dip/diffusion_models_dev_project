@@ -1,4 +1,5 @@
 data:
+    name: 'knee'
     dataset: "ImageNet"
     # image_size: 320 --> oom for 24GB 3090 GPU
     image_size: 256

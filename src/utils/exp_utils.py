@@ -364,6 +364,12 @@ def get_standard_ray_trafo(config):
             proj_col_sub_sampling=config.forward_op.proj_col_sub_sampling, 
             new_shape=config.data.new_shape
             )
+    elif config.forward_op.trafo_name.lower() == 'MulticoilMRI'.lower():
+        # load mask 
+
+        # load forward operator with this mask 
+        
+        raise NotImplementedError
     else: 
         raise NotImplementedError
 
@@ -436,7 +442,7 @@ def get_standard_train_dataset(config):
                 diameter=config.data.diameter,
                 device=config.device
             )
-        train_dl = torch.utils.data.DataLoader(dataset, batch_size=3, shuffle=False, num_workers=1)
+        train_dl = torch.utils.data.DataLoader(dataset, batch_size=config.data.batch_size, shuffle=False, num_workers=1)
     elif config.data.name.lower() == 'LoDoPabCT'.lower():
         dataset = LoDoPabDatasetFromDival(im_size=config.data.im_size)
         train_dl = dataset.get_trainloader(
@@ -467,6 +473,12 @@ def get_standard_configs(args, base_path):
     elif args.model_learned_on.lower() == 'aapm':
         path = os.path.realpath(__file__).split('/src')[0]
         with open(os.path.join(path, 'aapm_configs/ddpm', 'AAPM256.yml'), 'r') as stream:
+            config = yaml.load(stream, Loader=yaml.UnsafeLoader)
+            config['ckpt_path'] = args.load_path
+            config = OmegaConf.create(config)
+    elif args.model_learned_on.lower() == "knee":
+        path = os.path.realpath(__file__).split('/src')[0]
+        with open(os.path.join(path, 'fastmri_configs/ddpm', 'fastmri_knee_320_complex.yml'), 'r') as stream:
             config = yaml.load(stream, Loader=yaml.UnsafeLoader)
             config['ckpt_path'] = args.load_path
             config = OmegaConf.create(config)

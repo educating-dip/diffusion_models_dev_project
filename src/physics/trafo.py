@@ -89,8 +89,8 @@ class LoDoPabTrafo(BaseRayTrafo):
 
 		super().__init__(im_shape=[362, 362], obs_shape=obs_shape)
 
-		self.ray_trafo_op_fun = TorchRayTrafoParallel2DModule(ray_trafo_op)#.to("cuda") #ray_trafo_op_fun
-		self.ray_trafo_adjoint_op_fun = TorchRayTrafoParallel2DAdjointModule(ray_trafo_op)#.to("cuda") #ray_trafo_adjoint_op_fun
+		self.ray_trafo_op_fun = ray_trafo_op_fun#TorchRayTrafoParallel2DModule(ray_trafo_op)#.to("cuda") #ray_trafo_op_fun
+		self.ray_trafo_adjoint_op_fun = ray_trafo_adjoint_op_fun#TorchRayTrafoParallel2DAdjointModule(ray_trafo_op)#.to("cuda") #ray_trafo_adjoint_op_fun
 		self.fbp_fun = fbp_fun #TorchRayTrafoParallel2DAdjointModule(ray_trafo_op)#.to("cuda") #fbp_fun
 
 	@property

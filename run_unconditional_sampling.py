@@ -43,7 +43,12 @@ def coordinator(args):
 	score = get_standard_score(config=config, sde=sde, 
 			use_ema=args.ema, model_type="dds_unet", load_model=False)
 	if model_type == "dds_unet":
-		score.load_state_dict(torch.load(args.load_path))
+		if args.ema:
+			ema = ExponentialMovingAverage(score.parameters(), decay=0.999)
+			ema.load_state_dict(torch.load(args.load_path))
+			ema.copy_to(score.parameters())	
+		else:
+			score.load_state_dict(torch.load(args.load_path))
 		print(f'Model ckpt loaded from {args.load_path}')
 		score.convert_to_fp32()
 		score.dtype = torch.float32
@@ -104,6 +109,7 @@ def coordinator(args):
 	x_mean = sampler.sample(logging=False)
 	_, axes = plt.subplots(2,4)
 
+	"""
 	x = real_to_nchw_comp(x_mean)
 	print(x.shape)
 
@@ -115,9 +121,10 @@ def coordinator(args):
 	plt.show() 
 	x_plot = np.abs(x.cpu().numpy())
 	print(x_plot.shape)
+	"""
 	fig, axes = plt.subplots(1,4)
 	for idx, ax in enumerate(axes.ravel()):
-		ax.imshow(x_plot[idx, 0,:,:], cmap='gray')
+		ax.imshow(x_mean[idx, 0,:,:].cpu().numpy(), cmap='gray')
 		ax.axis('off')
 
 	plt.show()

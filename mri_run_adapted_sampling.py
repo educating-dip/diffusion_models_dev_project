@@ -15,7 +15,7 @@ from torchvision.transforms import Resize
 from src import (get_standard_sde, PSNR, SSIM, get_standard_dataset, get_data_from_ground_truth, get_standard_ray_trafo,  
 	get_standard_score, get_standard_adapted_sampler, get_standard_configs, get_standard_path, SingleCoilMRI) 
 
-parser = argparse.ArgumentParser(description='conditional sampling')
+parser = argparse.ArgumentParser(description='adapted sampling')
 parser.add_argument('--model', default='openai_unet', help='select unet arch.', choices=['dds_unet', 'openai_unet'])
 parser.add_argument('--method',  default='naive', choices=['naive', 'dps', 'dds'])
 parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde', 'ddpm'])

@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(description='conditional sampling')
 parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=['walnut', 'lodopab', 'ellipses', 'mayo', 'aapm'])
 parser.add_argument('--model', default='openai_unet', help='select unet arch.', choices=['dds_unet', 'openai_unet'])
 parser.add_argument('--base_path', default='/localdata/AlexanderDenker/score_based_baseline', help='path to model configs')
-parser.add_argument('--model_learned_on', default='lodopab', help='model-checkpoint to load', choices=['lodopab', 'ellipses', 'aapm'])
+parser.add_argument('--model_learned_on', default='lodopab', help='model-checkpoint to load', choices=['lodopab', 'ellipses', 'aapm', "knee"])
 parser.add_argument('--version', default=1, help="version of the model")
 parser.add_argument('--method',  default='naive', choices=['naive', 'dps', 'dds'])
 parser.add_argument('--add_corrector_step', action='store_true')
@@ -42,7 +42,7 @@ def coordinator(args):
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
 	ray_trafo = ray_trafo.to(device=config.device)
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
-
+	print("Number of parameters: ", sum([p.numel() for p in score.parameters()]))
 	_psnr, _ssim = [], []
 	for i, data_sample in enumerate(islice(dataset, dataconfig.data.validation.num_images)):
 		if config.seed is not None:

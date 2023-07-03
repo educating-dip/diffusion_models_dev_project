@@ -42,41 +42,47 @@ def coordinator(args):
 			use_ema=args.ema, model_type="openai_unet", load_model=False)
 	if args.ema:
 		ema = ExponentialMovingAverage(score.parameters(), decay=0.999)
-		ema.load_state_dict(torch.load(os.path.join(load_path, "ema_model_75.pt")))
+		ema.load_state_dict(torch.load(os.path.join(load_path, "ema_model.pt")))
 		ema.copy_to(score.parameters())	
 	else:
-		score.load_state_dict(torch.load(os.path.join(load_path, "model_75.pt")))
+		score.load_state_dict(torch.load(os.path.join(load_path, "model.pt")))
 	score = score.to(config.device)
 	score.eval()
 	
 	print("Number of Parameters: ", sum([p.numel() for p in score.parameters()]))
 
 	dataset = LoDoPabChallenge()
-	ray_trafo = LoDoPabTrafo()#.to(device=config.device)
+	ray_trafo = LoDoPabTrafo().to(device=config.device)
 
 	path = "/localdata/AlexanderDenker/score_results_lodopab"
 	save_root = Path(os.path.join(path, f'{time.strftime("%d-%m-%Y-%H-%M-%S")}'))
 	save_root.mkdir(parents=True, exist_ok=True)
 
-	config.sampling.batch_size = 1
+	config.sampling.batch_size = 6
 
 	psnr_list = [] 
 	ssim_list = []
 	print("number of images in dataset: ", len(dataset.lodopab_test))
 	print("num images to test: ", dataconfig.data.validation.num_images)
-	for i, data_sample in enumerate(islice(dataset.lodopab_test, dataconfig.data.validation.num_images)):
-		observation, ground_truth = data_sample
+	for i in range(dataconfig.data.validation.num_images):
+		print(i)
+		s_time = time.time()
+		observation, ground_truth = dataset.lodopab_test[i]
+		print("observation shape: ", observation.shape)
+		print("ground truth shape: ", ground_truth.shape)
 		ground_truth = ground_truth.to(device=config.device).unsqueeze(0)
 		ground_truth = torch.repeat_interleave(ground_truth, config.sampling.batch_size, dim=0)
 
 		observation = observation.to(device=config.device).unsqueeze(0)
-		observation = torch.repeat_interleave(observation, config.sampling.batch_size, dim=0)
-
 		filtbackproj = ray_trafo.fbp(observation)
-		filtbackproj = torch.repeat_interleave(filtbackproj, config.sampling.batch_size, dim=0)
 
+		observation = torch.repeat_interleave(observation, config.sampling.batch_size, dim=0)
+		filtbackproj = torch.repeat_interleave(filtbackproj, config.sampling.batch_size, dim=0)
+		e_time = time.time()
+		print("Loading data: ", e_time - s_time)
 		logg_kwargs = {'log_dir': save_root, 'num_img_in_log': 5,
 			'sample_num':i, 'ground_truth': ground_truth, 'filtbackproj': filtbackproj}
+		s_time = time.time()
 		sampler = get_standard_sampler(
 			args=args,
 			config=config,
@@ -87,6 +93,8 @@ def coordinator(args):
 			observation=observation,
 			device=config.device
 			)
+		e_time = time.time() 
+		print("Setting up sampler: ", e_time - s_time)
 		recon = sampler.sample(logg_kwargs=logg_kwargs,logging=False)
 		recon = torch.clamp(recon, 0, 1)
 
@@ -110,7 +118,7 @@ def coordinator(args):
 		print('SSIM (mean):', ssim)
 
 		if i < 5:
-			im = Image.fromarray(recon.cpu().squeeze().numpy()*255.).convert("L")
+			im = Image.fromarray(recon_mean.cpu().squeeze().numpy()*255.).convert("L")
 			im.save(str(save_root / f'recon_{i}.png'))
 		"""
 		fig, (ax1, ax2, ax3) = plt.subplots(1,3)
