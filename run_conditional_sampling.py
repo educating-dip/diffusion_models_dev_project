@@ -98,7 +98,8 @@ def coordinator(args):
 		ax3.axis('off')
 		ax3.set_title('FBP')
 		plt.savefig(str(save_root/f'info_{i}.png')) 
-		
+		plt.close() 
+		#plt.show()
 	report = {}
 	report.update(dict(dataconfig.items()))
 	report.update(vars(args))

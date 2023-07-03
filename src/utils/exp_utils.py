@@ -117,13 +117,7 @@ def get_standard_score_openai_unet(config, sde, use_ema, load_model=True):
 
     if config.sampling.load_model_from_path is not None and config.sampling.model_name is not None and load_model: 
         print(f'load score model from path: {config.sampling.load_model_from_path}')
-        if use_ema:
-            ema = ExponentialMovingAverage(score.parameters(), decay=0.999)
-            ema.load_state_dict(torch.load(os.path.join(config.sampling.load_model_from_path,'ema_model.pt')))
-            ema.copy_to(score.parameters())
-        else:
-            score.load_state_dict(torch.load(os.path.join(config.sampling.load_model_from_path, 'model.pt')))
-
+         
     return score
 
 def get_standard_sde(config):
@@ -459,11 +453,11 @@ def get_standard_configs(args, base_path):
     except AttributeError:
         pass 
     if args.model_learned_on.lower() == 'ellipses': 
-        load_path = os.path.join(base_path, 'DiskEllipses', _sde_classname, version)
-        print('load model from: ', load_path)
-        with open(os.path.join(load_path, 'report.yaml'), 'r') as stream:
+        path = os.path.realpath(__file__).split('/src')[0]
+        with open(os.path.join(path, 'ellipses_configs/ddpm', 'Ellipse256.yml'), 'r') as stream:
             config = yaml.load(stream, Loader=yaml.UnsafeLoader)
-            config.sampling.load_model_from_path = load_path
+            config['ckpt_path'] = args.load_path
+            config = OmegaConf.create(config)
     elif args.model_learned_on.lower() == 'lodopab':
         load_path = os.path.join(base_path, 'LoDoPabCT', _sde_classname, version)
         print('load model from: ', load_path)
