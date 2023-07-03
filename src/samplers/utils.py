@@ -270,7 +270,9 @@ def adapted_ddim_sde_predictor(
             if xhat0.shape[1] == 2:
                 permute_xhat0 = xhat0.permute(0,2,3,1).contiguous()
                 permute_xhat0 = torch.view_as_complex(permute_xhat0)
-                xhat = permute_xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(permute_xhat0)) + gamma*rhs
+                # xhat = permute_xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(permute_xhat0)) + gamma*rhs
+                _noise_rhs = permute_xhat0 + gamma*rhs
+                xhat = cg(op=op, x=permute_xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
                 xhat = torch.squeeze(torch.view_as_real(xhat), dim=1)
                 xhat = xhat.permute(0, 3, 1, 2)
             else:

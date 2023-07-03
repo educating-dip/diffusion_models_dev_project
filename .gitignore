@@ -21,7 +21,12 @@ __pycache__/
 
 
 exp/
+ckpts/
 results/
+results_adapt/
+results_adapt_tmp/
+results_noadapt/
+results_noadapt_tmp/
 score_model/
 
 checkpoints/
