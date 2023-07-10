@@ -8,6 +8,8 @@ import argparse
 from omegaconf import OmegaConf
 from math import ceil
 from pathlib import Path
+from torch.utils.data import TensorDataset
+
 from .sde import VESDE, VPSDE, DDPM, _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES
 from .ema import ExponentialMovingAverage
 from ..third_party_models import OpenAiUNetModel, UNetModel
@@ -384,13 +386,24 @@ def get_data_from_ground_truth(ground_truth, ray_trafo, white_noise_rel_stddev):
 def get_standard_dataset(config, ray_trafo=None):
 
     if config.data.name.lower() == 'DiskDistributedEllipsesDataset'.lower():
-        dataset = get_disk_dist_ellipses_dataset(
-        fold='test',
-        im_size=config.data.im_size,
-        length=config.data.val_length,
-        diameter=config.data.diameter,
-        max_n_ellipse=config.data.num_n_ellipse,
-        device=config.device)
+        if config.data.part == "val" and config.data.im_size == 256:
+            ellipse_path = "dataset/disk_ellipses_val_256.pt"
+            print("Load pre-saved ellipses dataset from ", ellipse_path)
+            x_ellipse = torch.load(ellipse_path)
+            dataset = TensorDataset(x_ellipse)
+        if config.data.part == "test" and config.data.im_size == 256:
+            ellipse_path = "dataset/disk_ellipses_test_256.pt"
+            print("Load pre-saved ellipses dataset from ", ellipse_path)
+            x_ellipse = torch.load(ellipse_path)
+            dataset = TensorDataset(x_ellipse)
+        else:
+            dataset = get_disk_dist_ellipses_dataset(
+            fold='test',
+            im_size=config.data.im_size,
+            length=config.data.val_length,
+            diameter=config.data.diameter,
+            max_n_ellipse=config.data.num_n_ellipse,
+            device=config.device)
     elif config.data.name.lower() == 'Walnut'.lower():
         dataset = get_walnut_data(config, ray_trafo)
     elif config.data.name.lower() == 'LoDoPabCT'.lower():
@@ -523,6 +536,10 @@ def get_standard_path(args,
                     "gamma=" + str(args.gamma))
     else:
         pass 
+
+    if not args.dataset == "walnut":
+        if not args.stddev == None:
+            path = os.path.join(path, "noise_level=" + str(args.stddev))
 
     return Path(os.path.join(path, f'{time.strftime("%d-%m-%Y-%H-%M-%S")}'))
 
