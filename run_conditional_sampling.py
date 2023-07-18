@@ -26,15 +26,21 @@ parser.add_argument('--pct_chain_elapsed', default=0,  help='``pct_chain_elapsed
 parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde', 'ddpm'])
 parser.add_argument('--cg_iter', default=5)
 parser.add_argument('--load_path', help='path to ddpm model.')
+parser.add_argument('--stddev', default=None, help="noise_level")
 
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args, base_path=args.base_path)
-	save_root = get_standard_path(args, run_type=args.method)
+	try:
+		save_root = get_standard_path(args, run_type=args.method, data_part=dataconfig.data.part)
+	except AttributeError:
+		save_root = get_standard_path(args, run_type=args.method)
 	print("save to: ", save_root)
 	save_root.mkdir(parents=True, exist_ok=True)
 
 	if config.seed is not None:
 		torch.manual_seed(config.seed) # for reproducible noise in simulate
+
+	dataconfig.data.stddev = dataconfig.data.stddev if args.stddev == None else float(args.stddev)
 
 	sde = get_standard_sde(config=config)
 	score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type=args.model)
@@ -53,6 +59,8 @@ def coordinator(args):
 			observation = observation.to(device=config.device)
 			filtbackproj = filtbackproj.to(device=config.device)
 		else:
+			if len(data_sample) == 1 and args.dataset == "ellipses" and dataconfig.data.part == "test":
+				data_sample = data_sample[0]
 			ground_truth, observation, filtbackproj = get_data_from_ground_truth(
 				ground_truth=data_sample.to(device=config.device),
 				ray_trafo=ray_trafo,
@@ -86,7 +94,7 @@ def coordinator(args):
 		print('SSIM:', ssim)
 		_psnr.append(psnr)
 		_ssim.append(ssim)
-
+		"""
 		_, (ax1, ax2, ax3) = plt.subplots(1,3)
 		ax1.imshow(ground_truth[0,0,:,:].detach().cpu(), cmap='gray')
 		ax1.axis('off')
@@ -99,6 +107,7 @@ def coordinator(args):
 		ax3.set_title('FBP')
 		plt.savefig(str(save_root/f'info_{i}.png')) 
 		plt.close() 
+		"""
 		#plt.show()
 	report = {}
 	report.update(dict(dataconfig.items()))

@@ -9,7 +9,8 @@ import numpy as np
 
 from src import (
 		get_standard_sde, get_standard_score, Euler_Maruyama_sde_predictor, wrapper_ddim,
-		Langevin_sde_corrector, BaseSampler,  _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES, ExponentialMovingAverage
+		Langevin_sde_corrector, BaseSampler,  _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES, 
+		ExponentialMovingAverage, Ancestral_Sampling
 	) 
 
 parser = argparse.ArgumentParser(description='conditional sampling')
@@ -66,7 +67,7 @@ def coordinator(args):
 
 	print(sum([p.numel() for p in score.parameters()]))
 
-	batch_size = 6
+	batch_size = 2
 	if any([isinstance(sde, classname) for classname in _SCORE_PRED_CLASSES]):
 		sampler = BaseSampler(
 			score=score,
@@ -89,11 +90,11 @@ def coordinator(args):
 		sampler = BaseSampler(
 			score=score,
 			sde=sde,
-			predictor=wrapper_ddim, 
+			predictor=functools.partial(Ancestral_Sampling, nloglik = None),  #wrapper_ddim, 
 			corrector=None,
 			init_chain_fn=None,
 			sample_kwargs={
-				'num_steps': 100,
+				'num_steps': 850,
 				'start_time_step': 0,
 				'batch_size': batch_size,
 				'im_shape': [config.data.channels, config.data.im_size, config.data.im_size],
@@ -107,7 +108,7 @@ def coordinator(args):
 
 		
 	x_mean = sampler.sample(logging=False)
-	_, axes = plt.subplots(2,4)
+	#_, axes = plt.subplots(2,4)
 
 	"""
 	x = real_to_nchw_comp(x_mean)
@@ -122,7 +123,7 @@ def coordinator(args):
 	x_plot = np.abs(x.cpu().numpy())
 	print(x_plot.shape)
 	"""
-	fig, axes = plt.subplots(1,4)
+	fig, axes = plt.subplots(1,batch_size)
 	for idx, ax in enumerate(axes.ravel()):
 		ax.imshow(x_mean[idx, 0,:,:].cpu().numpy(), cmap='gray')
 		ax.axis('off')
