@@ -16,6 +16,18 @@ from .utils import _schedule_jump
 from ..utils import SDE, _EPSILON_PRED_CLASSES, _SCORE_PRED_CLASSES, PSNR
 from ..third_party_models import OpenAiUNetModel
 
+def real_to_nchw_comp(x):
+    """
+    [1, 2, 320, 320] real --> [1, 1, 320, 320] comp
+    """
+    if len(x.shape) == 4:
+        x = x[:, 0:1, :, :] + x[:, 1:2, :, :] * 1j
+    elif len(x.shape) == 3:
+        x = x[0:1, :, :] + x[1:2, :, :] * 1j
+    return x
+
+
+
 class BaseSampler:
     def __init__(self, 
         score: OpenAiUNetModel, 
@@ -56,6 +68,13 @@ class BaseSampler:
             # ``_schedule_jump'' behaves as ``np.arange(-1. num_steps, 1)[::-1]''
             time_steps = _schedule_jump(num_steps, self.sample_kwargs['travel_length'], self.sample_kwargs['travel_repeat']) 
             time_pairs = list((i*skip, j*skip if j>0 else -1)  for i, j in zip(time_steps[:-1], time_steps[1:]))
+            
+            try:
+                time_pairs = time_pairs[:int(self.sample_kwargs['early_stopping_pct']*len(time_pairs))]
+                print("Use early stopping. Run for ", len(time_pairs), " timesteps. Stop at time step ", time_pairs[-1])
+            except KeyError:
+                pass
+
             __iter__= time_pairs
         else:
             raise NotImplementedError(self.sde.__class__ )
@@ -121,7 +140,14 @@ class BaseSampler:
             if logging:
                 if (i - self.sample_kwargs['start_time_step']) % logg_kwargs['num_img_in_log'] == 0:
                     writer.add_image('reco', torchvision.utils.make_grid(x_mean.squeeze(), normalize=True, scale_each=True), i)
-                psnr = PSNR(x_mean[0, 0].cpu().numpy(), logg_kwargs['ground_truth'][0, 0].cpu().numpy())
+                
+                if x_mean.shape[1] == 2:
+                    x_ = real_to_nchw_comp(x_mean)
+                    x_ = np.abs(x_.detach().cpu().numpy())
+                    psnr = PSNR(x_[0, 0], logg_kwargs['ground_truth'][0, 0].cpu().numpy())
+                else:
+                    psnr = PSNR(x_mean[0, 0].cpu().numpy(), logg_kwargs['ground_truth'][0, 0].cpu().numpy())
+                
                 writer.add_scalar('PSNR', psnr, i)
                 pbar.set_postfix({'psnr': psnr})
             i += 1

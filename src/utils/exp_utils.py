@@ -223,7 +223,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
         elif _sampler_funame == 'dps':
             predictor = functools.partial(
                 Ancestral_Sampling,
-                nloglik = lambda x: torch.linalg.norm(observation - ray_trafo(x)))
+                nloglik = lambda x: torch.linalg.norm(observation - ray_trafo(x))) 
             sample_kwargs = {
                 'num_steps': int(args.num_steps),
                 'batch_size': config.sampling.batch_size,
@@ -232,7 +232,8 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
                 'travel_repeat': config.sampling.travel_repeat,
                 'im_shape': [1, *_shape],
                 'predictor': {'penalty': float(args.penalty)},
-                'corrector': {}
+                'corrector': {},
+                'early_stopping_pct': float(args.early_stopping_pct)
                 }
 
         elif _sampler_funame == 'dds':
@@ -293,7 +294,8 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
                 'gamma': float(args.gamma),
                 'ray_trafo': ray_trafo 
                 },
-            'corrector': {}
+            'corrector': {},
+            'early_stopping_pct': float(args.early_stopping_pct)
             }
         adpt_kwargs = None
         if args.adaptation == 'lora':
