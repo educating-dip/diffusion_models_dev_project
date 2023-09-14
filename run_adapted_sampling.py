@@ -34,7 +34,9 @@ parser.add_argument('--add_cg', action='store_true', help='do DDS steps after ad
 parser.add_argument('--cg_iter', default=1, help='Number of CG steps for DDS update.')
 parser.add_argument('--gamma', default=0.01, help='reg. used for ``dds''.')
 parser.add_argument('--load_path', help='path to ddpm model.')
-parser.add_argument('--dc_type', default="cg", choices=["cg", "gd"], help="use cg/gd in adaptation")
+parser.add_argument('--dc_type', default="cg", choices=["cg", "gd", "none"], help="use cg/gd in adaptation (or none at all)")
+parser.add_argument('--stddev', default=None, help="noise_level")
+parser.add_argument('--early_stopping_pct', default=1.0)
 
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args, base_path=args.base_path)
@@ -43,6 +45,8 @@ def coordinator(args):
 		save_root = get_standard_path(args, run_type="adapt", data_part=dataconfig.data.part)
 	except AttributeError:
 		save_root = get_standard_path(args, run_type="adapt")
+
+	print("save to: ", save_root)
 
 	save_root.mkdir(parents=True, exist_ok=True)
 	
@@ -71,6 +75,8 @@ def coordinator(args):
 			observation = observation.to(device=config.device)
 			filtbackproj = filtbackproj.to(device=config.device)
 		else:
+			if len(data_sample) == 1 and args.dataset == "ellipses" and dataconfig.data.part == "test":
+				data_sample = data_sample[0]
 			ground_truth, observation, filtbackproj = get_data_from_ground_truth(
 				ground_truth=data_sample.to(device=config.device),
 				ray_trafo=ray_trafo,
@@ -97,7 +103,8 @@ def coordinator(args):
 		
 		score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type=args.model)
 		score = score.to(config.device)
-
+		score.eval() 
+		
 		print(f'reconstruction of sample {i}')
 		psnr = PSNR(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
 		ssim = SSIM(recon[0, 0].cpu().numpy(), ground_truth[0, 0].cpu().numpy())
@@ -105,7 +112,7 @@ def coordinator(args):
 		_ssim.append(ssim)
 		print('PSNR:', psnr)
 		print('SSIM:', ssim)
-
+		"""
 		_, (ax1, ax2, ax3) = plt.subplots(1,3)
 		ax1.imshow(ground_truth[0,0,:,:].detach().cpu(), cmap='gray')
 		ax1.axis('off')
@@ -117,6 +124,7 @@ def coordinator(args):
 		ax3.axis('off')
 		ax3.set_title('FBP')
 		plt.savefig(str(save_root/f'info_{i}.png')) 
+		"""
 		
 	report = {}
 	report.update(dict(dataconfig.items()))
