@@ -94,7 +94,7 @@ def Ancestral_Sampling(
     t = time_step[0]
     tminus1 = time_step[1]
 
-    if nloglik is not None: assert (datafitscale is not None) and (penalty is not None)
+    if nloglik is not None: assert penalty is not None
 
     phase = 'uncond' if nloglik is None else 'cond'
     with torch.set_grad_enabled(phase == 'cond'):
@@ -111,24 +111,18 @@ def Ancestral_Sampling(
             nloglik_grad = torch.autograd.grad(outputs=loss, inputs=x)[0]
             datafitscale = loss.pow(-1)
 
-        std_t = sde.marginal_prob_std(t=t)[:, None, None, None]
-        std_tminus1 = sde.marginal_prob_std(t=tminus1)[:, None, None, None]
-        
-        mean_tminus1 = sde.marginal_prob_mean(t=tminus1)[:, None, None, None]
-
+        std_t = sde.marginal_prob_std(t=t)[:, None, None, None] # sqrt(1 - alphabr)
         alpha_t = sde.alphas[int(t[0].item())]
 
-        x_mean = torch.sqrt(alpha_t)*std_tminus1**2/std_t**2*x 
-        x_mean = x_mean + mean_tminus1*(1 - alpha_t)/std_t**2*xhat0
+        x_mean = 1/torch.sqrt(alpha_t)*(x - (1 - alpha_t)/std_t*s)
 
-        
         noise = torch.sqrt(1 - alpha_t)*torch.randn_like(x)
+        if nloglik is not None:
+            x_mean = x_mean - penalty*nloglik_grad*datafitscale # Algo.1 sin 3. line 7
 
         x = x_mean + noise # Algo.1  in 3. line 6
-        if nloglik is not None:
-            x = x - penalty*nloglik_grad*datafitscale # Algo.1 sin 3. line 7
 
-    return x.detach(), x_mean.detach()
+    return x.detach(), xhat0.detach()
 
 
 def Langevin_sde_corrector(
@@ -199,17 +193,9 @@ def decomposed_diffusion_sampling_sde_predictor(
     with torch.no_grad():
         s = score(x, t)
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t) # Tweedy denoising step
-        if xhat0.shape[1] == 2:
-            permute_xhat0 = xhat0.permute(0,2,3,1).contiguous()
-            permute_xhat0 = torch.view_as_complex(permute_xhat0)
-            _noise_rhs = permute_xhat0 + gamma*rhs
 
-            xhat = cg(op=op, x=permute_xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
-            xhat = torch.squeeze(torch.view_as_real(xhat), dim=1)
-            xhat = xhat.permute(0, 3, 1, 2)
-        else:
-            _noise_rhs = xhat0 + gamma*rhs
-            xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
+        _noise_rhs = xhat0 + gamma*rhs
+        xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
         '''
         It implemets the predictor sampling strategy presented in
             2. @article{song2020denoising,
@@ -256,21 +242,17 @@ def _adapt(
         optim.zero_grad()
         s = score(x, time_step)
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=time_step)
-        if xhat0.shape[1] == 2:
-            permute_xhat0 = xhat0.permute(0,2,3,1).contiguous()
-            permute_xhat0 = torch.view_as_complex(permute_xhat0)
-            xhat = permute_xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(permute_xhat0)) + gamma*rhs
+
+        if dc_type == "cg":
+            _noise_rhs = xhat0 + gamma*rhs
+            xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=n_iter)
+        elif dc_type == "dc":
+            xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
+        elif dc_type == "none":
+            xhat = xhat0
         else:
-            if dc_type == "cg":
-                _noise_rhs = xhat0 + gamma*rhs
-                xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=n_iter)
-            elif dc_type == "dc":
-                xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
-            elif dc_type == "none":
-                xhat = xhat0
-            else:
-                raise NotImplementedError
-            #xhat = xhat0
+            raise NotImplementedError
+
         loss = loss_fn(x=xhat)
         print(loss.item())
         loss.backward()
@@ -323,27 +305,17 @@ def adapted_ddim_sde_predictor(
     with torch.no_grad():
         s = score(x, t) # adapted score
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t)
-        #xhat = xhat0
-        if xhat0.shape[1] == 2:
-            permute_xhat0 = xhat0.permute(0,2,3,1).contiguous()
-            permute_xhat0 = torch.view_as_complex(permute_xhat0)
-            # xhat = permute_xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(permute_xhat0)) + gamma*rhs
-            _noise_rhs = permute_xhat0 + gamma*rhs
-            xhat = cg(op=op, x=permute_xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
-            xhat = torch.squeeze(torch.view_as_real(xhat), dim=1)
-            xhat = xhat.permute(0, 3, 1, 2)
-        else:
-            if add_cg:
-                if dc_type == "cg":
-                    _noise_rhs = xhat0 + gamma*rhs
-                    xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
-                elif dc_type == "gd":
-                    xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
-                elif dc_type == "none":
-                    xhat = xhat0
-                else:
-                    raise NotImplementedError
-                #xhat = xhat0
+
+        if add_cg:
+            if dc_type == "cg":
+                _noise_rhs = xhat0 + gamma*rhs
+                xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
+            elif dc_type == "gd":
+                xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
+            elif dc_type == "none":
+                xhat = xhat0
+            else:
+                raise NotImplementedError
 
         if _has_lora(score=score):
             _tune_lora_scale(score=score, scale=0)

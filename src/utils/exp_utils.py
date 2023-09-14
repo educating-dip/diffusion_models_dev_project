@@ -223,7 +223,7 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
         elif _sampler_funame == 'dps':
             predictor = functools.partial(
                 Ancestral_Sampling,
-                nloglik = lambda x: torch.linalg.norm(observation - ray_trafo(x)))
+                nloglik = lambda x: torch.linalg.norm(observation - ray_trafo(x))) 
             sample_kwargs = {
                 'num_steps': int(args.num_steps),
                 'batch_size': config.sampling.batch_size,
@@ -232,7 +232,8 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
                 'travel_repeat': config.sampling.travel_repeat,
                 'im_shape': [1, *_shape],
                 'predictor': {'penalty': float(args.penalty)},
-                'corrector': {}
+                'corrector': {},
+                'early_stopping_pct': float(args.early_stopping_pct)
                 }
 
         elif _sampler_funame == 'dds':
@@ -293,7 +294,8 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
                 'gamma': float(args.gamma),
                 'ray_trafo': ray_trafo 
                 },
-            'corrector': {}
+            'corrector': {},
+            'early_stopping_pct': float(args.early_stopping_pct)
             }
         adpt_kwargs = None
         if args.adaptation == 'lora':
@@ -374,12 +376,7 @@ def get_standard_ray_trafo(config):
             proj_col_sub_sampling=config.forward_op.proj_col_sub_sampling, 
             new_shape=config.data.new_shape
             )
-    elif config.forward_op.trafo_name.lower() == 'MulticoilMRI'.lower():
-        # load mask 
 
-        # load forward operator with this mask 
-        
-        raise NotImplementedError
     else: 
         raise NotImplementedError
 
@@ -494,12 +491,6 @@ def get_standard_configs(args, base_path):
     elif args.model_learned_on.lower() == 'aapm':
         path = os.path.realpath(__file__).split('/src')[0]
         with open(os.path.join(path, 'aapm_configs/ddpm', 'AAPM256.yml'), 'r') as stream:
-            config = yaml.load(stream, Loader=yaml.UnsafeLoader)
-            config['ckpt_path'] = args.load_path
-            config = OmegaConf.create(config)
-    elif args.model_learned_on.lower() == "knee":
-        path = os.path.realpath(__file__).split('/src')[0]
-        with open(os.path.join(path, 'fastmri_configs/ddpm', 'fastmri_knee_320_complex.yml'), 'r') as stream:
             config = yaml.load(stream, Loader=yaml.UnsafeLoader)
             config['ckpt_path'] = args.load_path
             config = OmegaConf.create(config)
