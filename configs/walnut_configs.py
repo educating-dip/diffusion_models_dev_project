@@ -34,7 +34,7 @@ def get_config(args):
   config.model.attention_resolutions = [config.data.im_size // 16, config.data.im_size // 8]
 
   config.sampling.load_model_from_path = ''
-  config.sampling.model_name = "model.pt"
+  config.sampling.model_name = 'model.pt'
 
 
   return config

@@ -14,7 +14,7 @@ import numpy as np
 try:
     import astra
 except ModuleNotFoundError:
-    print("astra could not be loaded")
+    print('astra could not be loaded')
 import imageio
 import torch
 import scipy.sparse

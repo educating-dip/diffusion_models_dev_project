@@ -15,9 +15,9 @@ def get_config(args):
   data.diameter = 0.4745
   data.num_n_ellipse = 140
   data.validation = validation = ml_collections.ConfigDict()
-  validation.num_images = 10
+  validation.num_images = 100
 
-  data.part = "val"
+  data.part = 'test'
 
   # forward operator
   forward_op = config.forward_op

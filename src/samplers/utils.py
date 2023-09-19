@@ -7,10 +7,10 @@ import torch.nn as nn
 from torch import Tensor
 from src.utils.cg import cg
 from src.utils import SDE, VESDE, VPSDE, DDPM, _EPSILON_PRED_CLASSES, _SCORE_PRED_CLASSES
-from src.third_party_models import OpenAiUNetModel
+from src.third_party_models import OpenAiUNetModel, UNetModel
 
 def Euler_Maruyama_sde_predictor(
-    score: OpenAiUNetModel,
+    score: Union[OpenAiUNetModel, UNetModel],
     sde: SDE,
     x: Tensor,
     time_step: Tensor,
@@ -72,7 +72,7 @@ def Euler_Maruyama_sde_predictor(
     return x.detach(), x_mean.detach()
 
 def Ancestral_Sampling(
-    score: OpenAiUNetModel, 
+    score: Union[OpenAiUNetModel, UNetModel], 
     sde: SDE, 
     x: Tensor,
     time_step: Union[Tensor, Tuple[Tensor,Tensor]],
@@ -126,7 +126,7 @@ def Ancestral_Sampling(
 
 
 def Langevin_sde_corrector(
-    score: OpenAiUNetModel,
+    score: Union[OpenAiUNetModel, UNetModel],
     sde: SDE, # pylint: disable=unused-variable
     x: Tensor,
     time_step: Tensor,
@@ -157,7 +157,7 @@ def Langevin_sde_corrector(
     return x.detach()
 
 def decomposed_diffusion_sampling_sde_predictor( 
-    score: OpenAiUNetModel,
+    score: Union[OpenAiUNetModel, UNetModel],
     sde: SDE,
     x: Tensor,
     rhs: Tensor,
@@ -219,7 +219,7 @@ def decomposed_diffusion_sampling_sde_predictor(
 
 def _adapt(
     x: Tensor, 
-    score: OpenAiUNetModel,
+    score: Union[OpenAiUNetModel, UNetModel],
     sde: SDE,
     ray_trafo: callable,
     loss_fn: callable,
@@ -254,31 +254,30 @@ def _adapt(
             raise NotImplementedError
 
         loss = loss_fn(x=xhat)
-        print(loss.item())
         loss.backward()
 
         optim.step()
 
 def _tune_lora_scale(
-        score:OpenAiUNetModel, 
+        score: Union[OpenAiUNetModel, UNetModel], 
         scale: float = 1.0
         ):
     for _module in score.modules():
         if _module.__class__.__name__ in ['LoraInjectedLinear', 'LoraInjectedConv2d', 'LoraInjectedConv1d']:
             _module.scale = scale
 
-def _has_lora(score:OpenAiUNetModel):
+def _has_lora(score: Union[OpenAiUNetModel, UNetModel]):
     for _module in score.modules():
         if _module.__class__.__name__ in ['LoraInjectedLinear', 'LoraInjectedConv2d', 'LoraInjectedConv1d']:
             return True
 
-def _has_lora_active(score:OpenAiUNetModel):
+def _has_lora_active(score: Union[OpenAiUNetModel, UNetModel]):
     for _module in score.modules():
         if _module.__class__.__name__ in ['LoraInjectedLinear', 'LoraInjectedConv2d', 'LoraInjectedConv1d']:
             return _module.scale != 0 
 
 def adapted_ddim_sde_predictor( 
-    score: OpenAiUNetModel,
+    score: Union[OpenAiUNetModel, UNetModel],
     sde: SDE,
     x: Tensor,
     time_step: Union[Tensor, Tuple[Tensor,Tensor]],
@@ -432,7 +431,7 @@ def _schedule_jump(num_steps, travel_length, travel_repeat):
     return time_steps
 
 def wrapper_ddim(
-    score: OpenAiUNetModel, 
+    score: Union[OpenAiUNetModel, UNetModel], 
     sde: SDE, 
     x: Tensor, 
     time_step: Tensor, 

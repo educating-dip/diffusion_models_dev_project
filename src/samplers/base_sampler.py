@@ -55,12 +55,10 @@ class BaseSampler:
             # if ``self.sample_kwargs['travel_length']'' is 1. and ''self.sample_kwargs['travel_repeat']'' is 1. 
             # ``_schedule_jump'' behaves as ``np.arange(-1. num_steps, 1)[::-1]''
             time_steps = _schedule_jump(num_steps, self.sample_kwargs['travel_length'], self.sample_kwargs['travel_repeat']) 
-            time_pairs = list((i*skip, j*skip if j>0 else -1)  for i, j in zip(time_steps[:-1], time_steps[1:]))
-            
-            # implement early stopping 
+            time_pairs = list((i*skip, j*skip if j>0 else -1)  for i, j in zip(time_steps[:-1], time_steps[1:]))            
             try:
                 time_pairs = time_pairs[:int(self.sample_kwargs['early_stopping_pct']*len(time_pairs))]
-                print("Use early stopping. Run for ", len(time_pairs), " timesteps. Stop at time step ", time_pairs[-1])
+                print('Use early stopping. Run for ', len(time_pairs), ' timesteps. Stop at time step ', time_pairs[-1])
             except KeyError:
                 pass
 

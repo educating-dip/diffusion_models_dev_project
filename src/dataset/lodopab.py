@@ -147,9 +147,9 @@ class SubsetLoDoPab(Dataset):
 
         indices_val = indices[:10]
         indices_test = indices[10:]
-        if part == "val":
+        if part == 'val':
             self.lodopab_subset = torch.utils.data.Subset(lodopab_val, indices_val)
-        elif part == "test":
+        elif part == 'test':
             self.lodopab_subset = torch.utils.data.Subset(lodopab_val, indices_test)
 
     def __len__(self):

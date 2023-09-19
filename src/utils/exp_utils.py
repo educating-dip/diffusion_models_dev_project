@@ -395,16 +395,15 @@ def get_data_from_ground_truth(ground_truth, ray_trafo, white_noise_rel_stddev):
     return ground_truth, observation, filtbackproj
 
 def get_standard_dataset(config, ray_trafo=None):
-
     if config.data.name.lower() == 'DiskDistributedEllipsesDataset'.lower():
-        if config.data.part == "val" and config.data.im_size == 256:
-            ellipse_path = "dataset/disk_ellipses_val_256.pt"
-            print("Load pre-saved ellipses dataset from ", ellipse_path)
+        if config.data.part == 'val' and config.data.im_size == 256:
+            ellipse_path = 'dataset/disk_ellipses_val_256.pt'
+            print('Load pre-saved ellipses dataset from ', ellipse_path)
             x_ellipse = torch.load(ellipse_path)
             dataset = TensorDataset(x_ellipse)
-        if config.data.part == "test" and config.data.im_size == 256:
-            ellipse_path = "dataset/disk_ellipses_test_256.pt"
-            print("Load pre-saved ellipses dataset from ", ellipse_path)
+        if config.data.part == 'test' and config.data.im_size == 256:
+            ellipse_path = 'dataset/disk_ellipses_test_256.pt'
+            print('Load pre-saved ellipses dataset from ', ellipse_path)
             x_ellipse = torch.load(ellipse_path)
             dataset = TensorDataset(x_ellipse)
         else:
@@ -419,8 +418,6 @@ def get_standard_dataset(config, ray_trafo=None):
         dataset = get_walnut_data(config, ray_trafo)
     elif config.data.name.lower() == 'LoDoPabCT'.lower():
         dataset = SubsetLoDoPab(part=config.data.part, im_size=config.data.im_size) 
-        #dataset = LoDoPabDatasetFromDival(im_size=config.data.im_size)
-        #dataset = dataset.get_testloader(batch_size=1, num_data_loader_workers=0)
     elif config.data.name.lower() == 'Mayo'.lower(): 
         dataset = MayoDataset(
             part=config.data.part, 
@@ -531,47 +528,44 @@ def get_standard_dataset_configs(args):
 
     return dataconfig
 
-
-
-
 def get_standard_path(args, 
                     run_type=None, 
                     path='', 
                     data_part=None):
 
-    #path = './outputs/'
-    path = "/localdata/AlexanderDenker/new_run/outputs"
+    path = './outputs/'
+    # path = "/localdata/ AlexanderDenker/new_run/outputs"
     path = os.path.join(path,
                     args.model_learned_on + '_' + args.dataset)
 
     if data_part is not None:
         path = os.path.join(path, data_part)
     
-    if run_type == "adapt":
+    if run_type == 'adapt':
         path = os.path.join(path,
-                    "adapt",
-                    "adaptation=" + args.adaptation, 
-                    "dc_type=" + str(args.dc_type),
-                    "num_steps=" + str(args.num_steps),
-                    "num_optim_step=" + str(args.num_optim_step),
-                    "tv_penalty" + str(args.tv_penalty))
-    elif run_type == "dds":
+                    'adapt',
+                    'adaptation=' + args.adaptation, 
+                    'dc_type=' + str(args.dc_type),
+                    'num_steps=' + str(args.num_steps),
+                    'num_optim_step=' + str(args.num_optim_step),
+                    'tv_penalty' + str(args.tv_penalty))
+    elif run_type == 'dds':
         path = os.path.join(path, 
                     run_type,
-                    "num_steps=" + str(args.num_steps), 
-                    "cg_iter=" + str(args.cg_iter),
-                    "gamma=" + str(args.gamma))
-    elif run_type == "dps":
+                    'num_steps=' + str(args.num_steps), 
+                    'cg_iter=' + str(args.cg_iter),
+                    'gamma=' + str(args.gamma))
+    elif run_type == 'dps':
         path = os.path.join(path, 
                     run_type,
-                    "num_steps=" + str(args.num_steps), 
-                    "penalty=" + str(args.penalty))        
+                    'num_steps=' + str(args.num_steps), 
+                    'penalty=' + str(args.penalty))        
     else:
         pass 
 
-    if not args.dataset == "walnut":
+    if not args.dataset == 'walnut':
         if not args.stddev == None:
-            path = os.path.join(path, "noise_level=" + str(args.stddev))
+            path = os.path.join(path, 'noise_level=' + str(args.stddev))
 
     return Path(os.path.join(path, f'{time.strftime("%d-%m-%Y-%H-%M-%S")}'))
 
