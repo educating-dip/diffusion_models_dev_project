@@ -1,7 +1,6 @@
 import yaml
 import argparse
 import torch 
-import matplotlib.pyplot as plt
 import numpy as  np
 from PIL import Image
 
@@ -24,7 +23,7 @@ parser.add_argument('--penalty', default=1, help='reg. penalty used for ``naive'
 parser.add_argument('--tv_penalty', default=1e-6, help='reg. used for ``adapatation''.')
 parser.add_argument('--eta', default=0.85, help='reg. used for ``dds'' weighting stochastic and deterministic noise.')
 parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde', 'ddpm'])
-parser.add_argument('--adaptation', default='lora', choices=['decoder', 'full', 'vdkl', 'lora'])
+parser.add_argument('--adaptation', default='lora', choices=['lora'])
 parser.add_argument('--num_optim_step', default=10, help='num. of optimization steps taken per sampl. step')
 parser.add_argument('--adapt_freq', default=1, help='freq. of adaptation step in sampl.')
 parser.add_argument('--lora_include_blocks', default=['input_blocks','middle_block','output_blocks','out'], nargs='+', help='lora kwargs impl. of arch. blocks included')
@@ -58,9 +57,6 @@ def coordinator(args):
 	score = score.to(config.device).eval()
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
 	ray_trafo = ray_trafo.to(device=config.device)
-	
-	#from odl.operator.oputils import power_method_opnorm
-	#print("OPERATOR NORM: ", power_method_opnorm(ray_trafo.ray_trafo_op_fun.operator))
 
 	dataset = get_standard_dataset(config=dataconfig, ray_trafo=ray_trafo)
 
@@ -75,6 +71,7 @@ def coordinator(args):
 			observation = observation.to(device=config.device)
 			filtbackproj = filtbackproj.to(device=config.device)
 		else:
+			# simplify this (also in conditional) 
 			if len(data_sample) == 1 and args.dataset == "ellipses" and dataconfig.data.part == "test":
 				data_sample = data_sample[0]
 			ground_truth, observation, filtbackproj = get_data_from_ground_truth(
@@ -112,19 +109,6 @@ def coordinator(args):
 		_ssim.append(ssim)
 		print('PSNR:', psnr)
 		print('SSIM:', ssim)
-		"""
-		_, (ax1, ax2, ax3) = plt.subplots(1,3)
-		ax1.imshow(ground_truth[0,0,:,:].detach().cpu(), cmap='gray')
-		ax1.axis('off')
-		ax1.set_title('Ground truth')
-		ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu(), cmap='gray')
-		ax2.axis('off')
-		ax2.set_title('Adaptation Sampling')
-		ax3.imshow(filtbackproj[0,0,:,:].detach().cpu(), cmap='gray')
-		ax3.axis('off')
-		ax3.set_title('FBP')
-		plt.savefig(str(save_root/f'info_{i}.png')) 
-		"""
 		
 	report = {}
 	report.update(dict(dataconfig.items()))

@@ -9,6 +9,7 @@ from dival import get_standard_dataset
 from torch.nn.functional import interpolate
 from torch.utils.data import Dataset
 
+# TODO: TO-BE-REMOVED
 class LoDoPabDatasetFromDival():
     def __init__(self, 
         impl: str = 'astra_cuda',

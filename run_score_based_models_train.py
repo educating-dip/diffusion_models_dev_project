@@ -9,12 +9,14 @@ from src import (get_standard_sde, score_model_simple_trainer, get_standard_scor
 parser = argparse.ArgumentParser(description='training')
 parser.add_argument('--sde', default='vesde', choices=['vpsde', 'vesde', 'ddpm'])
 parser.add_argument('--base_path', default='/localdata/AlexanderDenker/score_based_baseline')
-parser.add_argument('--train_model_on', default='ellipses', help='training datasets', choices=['lodopab', 'lodopab_dival', 'ellipses'])
+parser.add_argument('--train_model_on', default='ellipses', help='training datasets', choices=['ellipses'])
 parser.add_argument("--model_type", default="openai_unet", choices=["openai_unet", "dds_unet"])
 
 def coordinator(args):
 
-	# different configs formats for different models, ugly but works for now 
+	# remove the lodopab training from here (@adenker)
+	# different configs formats for different models, ugly but works for now
+	
 	if args.model_type == "openai_unet":
 		if args.train_model_on == 'ellipses': 
 			from configs.disk_ellipses_configs import get_config

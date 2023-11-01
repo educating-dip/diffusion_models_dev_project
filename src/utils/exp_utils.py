@@ -11,7 +11,6 @@ from pathlib import Path
 from torch.utils.data import TensorDataset
 
 from .sde import VESDE, VPSDE, DDPM, _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES
-from .ema import ExponentialMovingAverage
 from ..third_party_models import OpenAiUNetModel, UNetModel
 from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDataset,  SubsetLoDoPab, 
     get_disk_dist_ellipses_dataset, get_one_ellipses_dataset, get_walnut_data, AAPMDataset)
@@ -304,11 +303,7 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
             'r': int(args.lora_rank)
             }
         _score_model_adpt(score, impl=args.adaptation, adpt_kwargs=adpt_kwargs)
-        if complex_y:
-            lloss_fn = lambda x: torch.mean(
-            torch.view_as_real(ray_trafo(x) - observation).pow(2))  + float(args.tv_penalty) * tv_loss(torch.abs(x))
-        else:
-            lloss_fn = lambda x: torch.mean(
+        lloss_fn = lambda x: torch.mean(
             (ray_trafo(x) - observation).pow(2))  + float(args.tv_penalty) * tv_loss(x)
         adapt_fn = functools.partial(
             _adapt, score=score, sde=sde, loss_fn=lloss_fn, num_steps=int(args.num_optim_step), lr=float(args.lr))

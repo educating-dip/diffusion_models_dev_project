@@ -1,6 +1,7 @@
 from torch.utils.data import DataLoader
 from dival import get_standard_dataset
 
+# TODO: TO-BE-REMOVED
 class EllipseDatasetFromDival():
     def __init__(self, 
         impl: str = 'astra_cuda'

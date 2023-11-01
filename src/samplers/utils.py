@@ -2,7 +2,6 @@ from typing import Optional, Any, Dict, Tuple, Union
 
 import torch
 import numpy as np
-import torch.nn as nn
 
 from torch import Tensor
 from src.utils.cg import cg
@@ -71,6 +70,7 @@ def Euler_Maruyama_sde_predictor(
 
     return x.detach(), x_mean.detach()
 
+# TODO: ancestral_sampling
 def Ancestral_Sampling(
     score: Union[OpenAiUNetModel, UNetModel], 
     sde: SDE, 
@@ -124,7 +124,7 @@ def Ancestral_Sampling(
 
     return x.detach(), xhat0.detach()
 
-
+#  TODO: remove and remove dependencies
 def Langevin_sde_corrector(
     score: Union[OpenAiUNetModel, UNetModel],
     sde: SDE, # pylint: disable=unused-variable
@@ -243,10 +243,11 @@ def _adapt(
         s = score(x, time_step)
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=time_step)
 
+        # remove the type of CG used and keep or 'none' and remove it from terminal
         if dc_type == "cg":
             _noise_rhs = xhat0 + gamma*rhs
             xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=n_iter)
-        elif dc_type == "dc":
+        elif dc_type == "dc": # remove it 
             xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
         elif dc_type == "none":
             xhat = xhat0
@@ -304,12 +305,13 @@ def adapted_ddim_sde_predictor(
     with torch.no_grad():
         s = score(x, t) # adapted score
         xhat0 = apTweedy(s=s, x=x, sde=sde, time_step=t)
-
-        if add_cg:
+        
+        # remove the type of CG used and keep or 'none' and remove it from terminal
+        if add_cg: # remove this args 
             if dc_type == "cg":
                 _noise_rhs = xhat0 + gamma*rhs
                 xhat = cg(op=op, x=xhat0, rhs=_noise_rhs, n_iter=cg_kwargs['max_iter'])
-            elif dc_type == "gd":
+            elif dc_type == "gd": # remove it
                 xhat = xhat0 - gamma * ray_trafo.trafo_adjoint(ray_trafo(xhat0)) + gamma*rhs
             elif dc_type == "none":
                 xhat = xhat0
@@ -375,6 +377,7 @@ def apTweedy(s: Tensor, x: Tensor, sde: SDE, time_step:Tensor) -> Tensor:
 
     return update*div
 
+#  TODO: remove and remove dependencies
 def chain_simple_init(
     time_steps: Tensor,
     sde: SDE,

@@ -11,8 +11,6 @@ from itertools import repeat
 from odl import uniform_discr
 from odl.phantom import ellipsoid_phantom
 
-from src.physics import SimulatedDataset
-
 class EllipsesDataset(torch.utils.data.IterableDataset):
     """
     Dataset with images of multiple random ellipses.
@@ -156,7 +154,7 @@ def get_disk_dist_ellipses_dataset(
     
     return image_dataset
 
-
+# TODO: TO-BE-REMOVED
 class OneEllipsesDataset(EllipsesDataset):
 
     def __init__(self,             

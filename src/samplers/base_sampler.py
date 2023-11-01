@@ -18,7 +18,7 @@ from ..third_party_models import OpenAiUNetModel
 
 class BaseSampler:
     def __init__(self, 
-        score: OpenAiUNetModel, 
+        score: OpenAiUNetModel, # fix the typing
         sde: SDE,
         predictor: callable,
         sample_kwargs: Dict,
@@ -30,9 +30,9 @@ class BaseSampler:
         self.score = score
         self.sde = sde
         self.predictor = predictor
-        self.init_chain_fn = init_chain_fn
+        self.init_chain_fn = init_chain_fn # remove this option
         self.sample_kwargs = sample_kwargs
-        self.corrector = corrector
+        self.corrector = corrector # remove this option (@rb876)
         self.device = device
     
     def sample(self,
@@ -67,7 +67,7 @@ class BaseSampler:
             raise NotImplementedError(self.sde.__class__ )
 
         step_size = time_steps[0] - time_steps[1]
-        if self.sample_kwargs['start_time_step'] == 0:
+        if self.sample_kwargs['start_time_step'] == 0: # this will always be true
             init_x = self.sde.prior_sampling([self.sample_kwargs['batch_size'], *self.sample_kwargs['im_shape']]).to(self.device)
         else:
             assert not any([isinstance(self.sde, classname) for classname in _EPSILON_PRED_CLASSES])
@@ -114,6 +114,7 @@ class BaseSampler:
                 **self.sample_kwargs['predictor']
                 )
 
+            # TODO: remove this 
             if self.corrector is not None:
                 x = self.corrector(
                     x=x,

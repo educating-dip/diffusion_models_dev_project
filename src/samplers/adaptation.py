@@ -10,6 +10,7 @@ def tv_loss(x):
     dw = torch.abs(x[..., 1:, :] - x[..., :-1, :])
     return torch.sum(dh[..., :-1, :] + dw[..., :, :-1])
 
+# TODO: eliminate the redundancy here : only lora (@rb876)
 def _score_model_adpt(
     score: nn.Module, 
     impl: str = 'full', 

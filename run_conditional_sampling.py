@@ -2,7 +2,6 @@ import argparse
 import yaml 
 import torch 
 import numpy as np 
-import matplotlib.pyplot as plt
 from itertools import islice
 from PIL import Image
 
@@ -96,22 +95,6 @@ def coordinator(args):
 		_psnr.append(psnr)
 		_ssim.append(ssim)
 		
-		#fig, (ax1, ax2, ax3) = plt.subplots(1,3)
-		#im = ax1.imshow(ground_truth[0,0,:,:].detach().cpu(), cmap='gray')
-		#fig.colorbar(im, ax=ax1)
-		#ax1.axis('off')
-		#ax1.set_title('Ground truth')
-		#im = ax2.imshow(torch.clamp(recon[0,0,:,:], 0, 1).detach().cpu(), cmap='gray')
-		#fig.colorbar(im, ax=ax2)
-		#ax2.axis('off')
-		#ax2.set_title(args.method)
-		#ax3.imshow(filtbackproj[0,0,:,:].detach().cpu(), cmap='gray')
-		#ax3.axis('off')
-		#ax3.set_title('FBP')
-		#plt.savefig(str(save_root/f'info_{i}.png')) 
-		#plt.show() 
-		
-		#plt.show()
 	report = {}
 	report.update(dict(dataconfig.items()))
 	report.update(vars(args))
