@@ -1,5 +1,4 @@
-from .dataset import (EllipseDatasetFromDival, MayoDataset, AAPMDataset, 
-    get_disk_dist_ellipses_dataset, get_walnut_data)
+from .dataset import (EllipseDatasetFromDival, AAPMDataset, get_disk_dist_ellipses_dataset, get_walnut_data)
 from .utils import (VESDE, VPSDE, DDPM, SDE, _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES, 
     score_based_loss_fn, epsilon_based_loss_fn, PSNR, SSIM, ExponentialMovingAverage,
     score_model_simple_trainer, get_standard_dataset, get_data_from_ground_truth, get_standard_score,

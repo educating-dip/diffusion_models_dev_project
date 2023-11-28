@@ -58,21 +58,6 @@ def get_default_configs(args):
 
     # model configs
     config.model = model = ml_collections.ConfigDict()
-    model.model_name = 'OpenAiUNetModel'
-    model.in_channels = 1
-    model.model_channels = 128
-    model.out_channels = 1
-    model.num_res_blocks = 2
-    #model.attention_resolutions = [config.data.im_size // 16, config.data.im_size // 8]
-    model.channel_mult = (1., 1., 2., 4., 4., 4.) # (0.5, 1, 1, 2, 2, 2, 4)
-    model.conv_resample = True
-    model.dims = 2
-    model.num_heads = 4
-    model.num_head_channels = -1
-    model.num_heads_upsample = -1
-    model.use_scale_shift_norm = True 
-    model.resblock_updown = False
-    model.use_new_attention_order = False
     if args.sde in ['vesde', 'vpsde']:
         model.max_period = 0.005
     elif args.sde in ['ddpm']:

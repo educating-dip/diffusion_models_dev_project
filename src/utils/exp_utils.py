@@ -390,18 +390,16 @@ def get_standard_configs(args, base_path):
         version = 'version_{:02d}'.format(int(args.version))
     except AttributeError:
         pass 
+
     if args.model_learned_on.lower() == 'ellipses': 
-        path = os.path.realpath(__file__).split('/src')[0]
-        with open(os.path.join(path, 'ellipses_configs/ddpm', 'Ellipse256.yml'), 'r') as stream:
-            config = yaml.load(stream, Loader=yaml.UnsafeLoader)
-            config['ckpt_path'] = args.load_path
-            config = OmegaConf.create(config)
+        from configs.disk_ellipses_configs import get_config
+        config = get_config(args)
+        config.ckpt_path = args.load_path
     elif args.model_learned_on.lower() == 'aapm':
-        path = os.path.realpath(__file__).split('/src')[0]
-        with open(os.path.join(path, 'aapm_configs/ddpm', 'AAPM256.yml'), 'r') as stream:
-            config = yaml.load(stream, Loader=yaml.UnsafeLoader)
-            config['ckpt_path'] = args.load_path
-            config = OmegaConf.create(config)
+        from configs.aapm_configs import get_config
+        config = get_config(args)
+        config.ckpt_path = args.load_path
+
     else:
         raise NotImplementedError
 
@@ -471,13 +469,3 @@ def get_standard_path(args,
             path = os.path.join(path, 'noise_level=' + str(args.stddev))
 
     return Path(os.path.join(path, f'{time.strftime("%d-%m-%Y-%H-%M-%S")}'))
-
-def dict2namespace(config):
-    namespace = argparse.Namespace()
-    for key, value in config.items():
-        if isinstance(value, dict):
-            new_value = dict2namespace(value)
-        else:
-            new_value = value
-        setattr(namespace, key, new_value)
-    return namespace
