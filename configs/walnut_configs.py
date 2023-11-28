@@ -29,14 +29,6 @@ def get_config(args):
   forward_op.angular_sub_sampling = 20  # 1200 -> 60
   forward_op.proj_col_sub_sampling = 6  # 768 -> 128
 
-  # model
-  config.model.model_name = 'OpenAiUNetModel'
-  config.model.attention_resolutions = [config.data.im_size // 16, config.data.im_size // 8]
-
-  config.sampling.load_model_from_path = ''
-  config.sampling.model_name = 'model.pt'
-
-
   return config
 
 

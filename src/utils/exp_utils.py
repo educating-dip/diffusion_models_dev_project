@@ -443,7 +443,6 @@ def get_standard_path(args,
                     data_part=None):
 
     path = './outputs/'
-    # path = "/localdata/ AlexanderDenker/new_run/outputs"
     path = os.path.join(path,
                     args.model_learned_on + '_' + args.dataset)
 
