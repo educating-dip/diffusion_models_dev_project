@@ -14,25 +14,21 @@ from torch.utils.tensorboard import SummaryWriter
 
 from .utils import _schedule_jump
 from ..utils import SDE, _EPSILON_PRED_CLASSES, _SCORE_PRED_CLASSES, PSNR
-from ..third_party_models import OpenAiUNetModel
+from ..third_party_models import UNetModel
 
 class BaseSampler:
     def __init__(self, 
-        score: OpenAiUNetModel, # fix the typing
+        score: UNetModel, # fix the typing
         sde: SDE,
         predictor: callable,
         sample_kwargs: Dict,
-        init_chain_fn: Optional[callable] = None,
-        corrector: Optional[callable] = None,
         device: Optional[Any] = None
         ) -> None:
 
         self.score = score
         self.sde = sde
         self.predictor = predictor
-        self.init_chain_fn = init_chain_fn # remove this option
         self.sample_kwargs = sample_kwargs
-        self.corrector = corrector # remove this option (@rb876)
         self.device = device
     
     def sample(self,
@@ -67,11 +63,7 @@ class BaseSampler:
             raise NotImplementedError(self.sde.__class__ )
 
         step_size = time_steps[0] - time_steps[1]
-        if self.sample_kwargs['start_time_step'] == 0: # this will always be true
-            init_x = self.sde.prior_sampling([self.sample_kwargs['batch_size'], *self.sample_kwargs['im_shape']]).to(self.device)
-        else:
-            assert not any([isinstance(self.sde, classname) for classname in _EPSILON_PRED_CLASSES])
-            init_x = self.init_chain_fn(time_steps=time_steps)
+        init_x = self.sde.prior_sampling([self.sample_kwargs['batch_size'], *self.sample_kwargs['im_shape']]).to(self.device)
         
         if logging:
             writer.add_image('init_x', torchvision.utils.make_grid(init_x, 
@@ -113,17 +105,6 @@ class BaseSampler:
                 datafitscale=step/self.sample_kwargs['num_steps'] if not isinstance(step, Tuple) else 1.,
                 **self.sample_kwargs['predictor']
                 )
-
-            # TODO: remove this 
-            if self.corrector is not None:
-                x = self.corrector(
-                    x=x,
-                    score=self.score,
-                    sde=self.sde,
-                    time_step=time_step,
-                    datafitscale=step/self.sample_kwargs['num_steps'] if not isinstance(step, Tuple) else 1.,
-                    **self.sample_kwargs['corrector']
-                    )
 
             if logging:
                 if (i - self.sample_kwargs['start_time_step']) % logg_kwargs['num_img_in_log'] == 0:

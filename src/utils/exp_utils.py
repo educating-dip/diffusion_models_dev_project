@@ -11,27 +11,22 @@ from pathlib import Path
 from torch.utils.data import TensorDataset
 
 from .sde import VESDE, VPSDE, DDPM, _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES
-from ..third_party_models import OpenAiUNetModel, UNetModel
-from ..dataset import (LoDoPabDatasetFromDival, EllipseDatasetFromDival, MayoDataset,  SubsetLoDoPab, 
-    get_disk_dist_ellipses_dataset, get_one_ellipses_dataset, get_walnut_data, AAPMDataset)
+from ..third_party_models import UNetModel
+from ..dataset import EllipseDatasetFromDival, get_disk_dist_ellipses_dataset, get_walnut_data, AAPMDataset
 from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
-from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, 
+from ..samplers import (BaseSampler, Euler_Maruyama_sde_predictor, 
     chain_simple_init, decomposed_diffusion_sampling_sde_predictor, 
     adapted_ddim_sde_predictor, tv_loss, _adapt, _score_model_adpt, Ancestral_Sampling)
 
-def get_standard_score(model_type, config, sde, use_ema, load_model=True):
+def get_standard_score(config, sde, use_ema, load_model=True):
 
-    if model_type == 'openai_unet':
-        score = get_standard_score_openai_unet(config, sde, use_ema, load_model=load_model)
-    elif model_type == 'dds_unet':
-        score = create_model(**dict(config.model))
-        if load_model:
-            score.load_state_dict(torch.load(config.ckpt_path))
-            print(f'Model ckpt loaded from {config.ckpt_path}')
-        score.convert_to_fp32()
-        score.dtype = torch.float32
-    else:
-        raise NotImplementedError
+    score = create_model(**dict(config.model))
+    if load_model:
+        score.load_state_dict(torch.load(config.ckpt_path))
+        print(f'Model ckpt loaded from {config.ckpt_path}')
+    score.convert_to_fp32()
+    score.dtype = torch.float32
+
     return score 
 
 def create_model(
@@ -93,35 +88,6 @@ def create_model(
     )
 
 
-def get_standard_score_openai_unet(config, sde, use_ema, load_model=True):
-    if config.model.model_name.lower() == 'OpenAiUNetModel'.lower():
-        score = OpenAiUNetModel(
-            image_size=config.data.im_size,
-            in_channels=config.model.in_channels,
-            model_channels=config.model.model_channels,
-            out_channels=config.model.out_channels,
-            num_res_blocks=config.model.num_res_blocks,
-            attention_resolutions=config.model.attention_resolutions,
-            marginal_prob_std=sde.marginal_prob_std if any([isinstance(sde, classname) for classname in _SCORE_PRED_CLASSES]) else None,
-            channel_mult=config.model.channel_mult,
-            conv_resample=config.model.conv_resample,
-            dims=config.model.dims,
-            num_heads=config.model.num_heads,
-            num_head_channels=config.model.num_head_channels,
-            num_heads_upsample=config.model.num_heads_upsample,
-            use_scale_shift_norm=config.model.use_scale_shift_norm,
-            resblock_updown=config.model.resblock_updown,
-            use_new_attention_order=config.model.use_new_attention_order,
-            max_period=config.model.max_period
-            )
-    else:
-        raise NotImplementedError
-
-    if config.sampling.load_model_from_path is not None and config.sampling.model_name is not None and load_model: 
-        print(f'load score model from path: {config.sampling.load_model_from_path}')
-         
-    return score
-
 def get_standard_sde(config):
 
     _sde_classname = config.sde.type.lower()
@@ -162,7 +128,6 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
                 'im_shape': [1, _shape],
                 'eps': config.sampling.eps,
                 'predictor': {'aTweedy': False, 'penalty': float(args.penalty)},
-                'corrector': {}
                 }
         elif _sampler_funame == 'dps':
             predictor = functools.partial(
@@ -175,7 +140,6 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
                 'im_shape': [1, _shape],
                 'eps': config.sampling.eps,
                 'predictor': {'aTweedy': True, 'penalty': float(args.penalty)},
-                'corrector': {}
                 }
         elif _sampler_funame == 'dds':
             sample_kwargs = {
@@ -185,7 +149,6 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
                 'im_shape': [1, _shape],
                 'eps': config.sampling.eps,
                 'predictor': {'eta': float(args.eta), 'gamma': float(args.gamma), 'use_simplified_eqn': True, 'ray_trafo': ray_trafo},
-                'corrector': {}
                 }
             predictor = functools.partial(
                 decomposed_diffusion_sampling_sde_predictor,
@@ -197,24 +160,6 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
         else:
             raise NotImplementedError(_sampler_funame)
 
-        corrector = None
-        if args.add_corrector_step:
-            corrector = functools.partial(  Langevin_sde_corrector,
-                nloglik = lambda x: torch.linalg.norm(observation - ray_trafo(x))   )
-            sample_kwargs['corrector']['corrector_steps'] = 5
-            sample_kwargs['corrector']['penalty'] = float(args.penalty)
-
-        init_chain_fn = None
-        if sample_kwargs['start_time_step'] > 0:
-            init_chain_fn = functools.partial(  
-            chain_simple_init,
-            sde=sde,
-            filtbackproj=filtbackproj,
-            start_time_step=sample_kwargs['start_time_step'],
-            im_shape=_shape,
-            batch_size=sample_kwargs['batch_size'],
-            device=device
-            )
     
     elif any([isinstance(sde, classname) for classname in _EPSILON_PRED_CLASSES]):
         if _sampler_funame == 'naive':
@@ -231,7 +176,6 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
                 'travel_repeat': config.sampling.travel_repeat,
                 'im_shape': [1, *_shape],
                 'predictor': {'penalty': float(args.penalty)},
-                'corrector': {},
                 'early_stopping_pct': float(args.early_stopping_pct)
                 }
 
@@ -245,7 +189,6 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
                 'travel_length': config.sampling.travel_length,
                 'travel_repeat': config.sampling.travel_repeat, 
                 'predictor': {'eta': float(args.eta), 'gamma': float(args.gamma), 'use_simplified_eqn': True, 'ray_trafo': ray_trafo},
-                'corrector': {}
                 }
             predictor = functools.partial(
                 decomposed_diffusion_sampling_sde_predictor,
@@ -264,7 +207,6 @@ def get_standard_sampler(args, config, score, sde, ray_trafo, observation=None, 
         score=score,
         sde=sde,
         predictor=predictor,         
-        corrector=corrector,
         init_chain_fn=init_chain_fn,
         sample_kwargs=sample_kwargs, 
         device=config.device
@@ -319,11 +261,6 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
     else:
         raise NotImplementedError
 
-    corrector = None
-    if args.add_corrector_step and any([isinstance(sde, classname) for classname in _SCORE_PRED_CLASSES]):
-        corrector = functools.partial(Langevin_sde_corrector)
-        sample_kwargs['corrector']['corrector_steps'] = 1
-        sample_kwargs['corrector']['penalty'] = float(args.penalty)
 
     if any([isinstance(sde, classname) for classname in _EPSILON_PRED_CLASSES]):
         try:
@@ -339,13 +276,10 @@ def get_standard_adapted_sampler(args, config, score, sde, ray_trafo, observatio
             }
         )
 
-    init_chain_fn = None
     sampler = BaseSampler(
         score=score, 
         sde=sde,
         predictor=predictor,         
-        corrector=corrector,
-        init_chain_fn=init_chain_fn,
         sample_kwargs=sample_kwargs, 
         device=config.device
         )
@@ -411,14 +345,7 @@ def get_standard_dataset(config, ray_trafo=None):
             device=config.device)
     elif config.data.name.lower() == 'Walnut'.lower():
         dataset = get_walnut_data(config, ray_trafo)
-    elif config.data.name.lower() == 'LoDoPabCT'.lower():
-        dataset = SubsetLoDoPab(part=config.data.part, im_size=config.data.im_size) 
-    elif config.data.name.lower() == 'Mayo'.lower(): 
-        dataset = MayoDataset(
-            part=config.data.part, 
-            base_path=config.data.base_path, 
-            im_shape=ray_trafo.im_shape
-            ) 
+      
     elif config.data.name.lower() == "aapm":
         dataset = AAPMDataset(part=config.data.part, base_path=config.data.base_path)
     else:
@@ -453,12 +380,7 @@ def get_standard_train_dataset(config):
                 device=config.device
             )
         train_dl = torch.utils.data.DataLoader(dataset, batch_size=config.data.batch_size, shuffle=False, num_workers=1)
-    elif config.data.name.lower() == 'LoDoPabCT'.lower():
-        dataset = LoDoPabDatasetFromDival(im_size=config.data.im_size)
-        train_dl = dataset.get_trainloader(
-            batch_size=config.training.batch_size,
-            num_data_loader_workers=16
-            )
+   
     
     return train_dl
 
@@ -474,12 +396,6 @@ def get_standard_configs(args, base_path):
             config = yaml.load(stream, Loader=yaml.UnsafeLoader)
             config['ckpt_path'] = args.load_path
             config = OmegaConf.create(config)
-    elif args.model_learned_on.lower() == 'lodopab':
-        load_path = os.path.join(base_path, 'LoDoPabCT', _sde_classname, version)
-        print('load model from: ', load_path)
-        with open(os.path.join(load_path, 'report.yaml'), 'r') as stream:
-            config = yaml.load(stream, Loader=yaml.UnsafeLoader)
-            config.sampling.load_model_from_path = load_path
     elif args.model_learned_on.lower() == 'aapm':
         path = os.path.realpath(__file__).split('/src')[0]
         with open(os.path.join(path, 'aapm_configs/ddpm', 'AAPM256.yml'), 'r') as stream:
@@ -491,12 +407,8 @@ def get_standard_configs(args, base_path):
 
     if args.dataset.lower() == 'ellipses': 	# validation dataset configs
         from configs.disk_ellipses_configs import get_config
-    elif args.dataset.lower() == 'lodopab':
-        from configs.lodopab_configs import get_config
     elif args.dataset.lower() == 'walnut':
         from configs.walnut_configs import get_config
-    elif args.dataset.lower() == 'mayo': 
-        from configs.mayo_configs import get_config
     elif args.dataset.lower() == 'aapm':
         from configs.aapm_configs import get_config
     else:
@@ -509,12 +421,8 @@ def get_standard_dataset_configs(args):
     
     if args.dataset.lower() == 'ellipses': 	# validation dataset configs
         from configs.disk_ellipses_configs import get_config
-    elif args.dataset.lower() == 'lodopab':
-        from configs.lodopab_configs import get_config
     elif args.dataset.lower() == 'walnut':
         from configs.walnut_configs import get_config
-    elif args.dataset.lower() == 'mayo': 
-        from configs.mayo_configs import get_config
     elif args.dataset.lower() == 'aapm':
         from configs.aapm_configs import get_config
     else:

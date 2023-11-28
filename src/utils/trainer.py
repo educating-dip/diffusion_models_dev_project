@@ -13,11 +13,11 @@ from .losses import score_based_loss_fn, epsilon_based_loss_fn
 from .ema import ExponentialMovingAverage
 from .sde import SDE, _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES
 
-from ..third_party_models import OpenAiUNetModel
-from ..samplers import BaseSampler, Euler_Maruyama_sde_predictor, Langevin_sde_corrector, wrapper_ddim
+from ..third_party_models import UNetModel
+from ..samplers import BaseSampler, Euler_Maruyama_sde_predictor, wrapper_ddim
 
 def score_model_simple_trainer(
-	score: OpenAiUNetModel,
+	score: UNetModel,
 	sde: SDE, 
 	train_dl: DataLoader, 
 	optim_kwargs: Dict,
@@ -72,8 +72,6 @@ def score_model_simple_trainer(
 						score=score,
 						sde=sde,
 						predictor=functools.partial(Euler_Maruyama_sde_predictor, nloglik = None),
-						corrector=functools.partial(Langevin_sde_corrector, nloglik = None),
-						init_chain_fn=None,
 						sample_kwargs={
 							'num_steps': val_kwargs['num_steps'],
 							'start_time_step': 0,
@@ -81,7 +79,6 @@ def score_model_simple_trainer(
 							'im_shape': x.shape[1:],
 							'eps': val_kwargs['eps'],
 							'predictor': {'aTweedy': False},
-							'corrector': {'corrector_steps': 1}
 							},
 						device=device)
 				elif any([isinstance(sde, classname) for classname in _EPSILON_PRED_CLASSES]):
@@ -90,8 +87,6 @@ def score_model_simple_trainer(
 						score=score,
 						sde=sde,
 						predictor=wrapper_ddim, 
-						corrector=None,
-						init_chain_fn=None,
 						sample_kwargs={
 							'num_steps': val_kwargs['num_steps'],
 							'start_time_step': 0,

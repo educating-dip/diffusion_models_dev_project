@@ -663,10 +663,9 @@ class UNetModel(nn.Module):
             h = th.cat([h, hs.pop()], dim=1)
             h = module(h, emb)
         h = h.type(x.dtype)
+        
         # TODO: simplify this (@adenker)
         if self.out_channels == 2:
             return self.out(h)[:, :1]
-        elif self.out_channels == 4:
-            return self.out(h)[:, :2]
         else:
             return self.out(h)

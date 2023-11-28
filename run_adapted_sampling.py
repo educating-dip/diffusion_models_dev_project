@@ -10,7 +10,6 @@ from src import (get_standard_sde, PSNR, SSIM, get_standard_dataset, get_data_fr
 
 parser = argparse.ArgumentParser(description='conditional sampling')
 parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=['walnut', 'lodopab', 'ellipses', 'mayo', 'aapm'])
-parser.add_argument('--model', default='openai_unet', help='select unet arch.', choices=['dds_unet', 'openai_unet'])
 parser.add_argument('--base_path', default='/localdata/AlexanderDenker/score_based_baseline', help='path to model configs')
 parser.add_argument('--model_learned_on', default='lodopab', help='model-checkpoint to load', choices=['lodopab', 'ellipses', 'aapm'])
 parser.add_argument('--method',  default='naive', choices=['naive', 'dps', 'dds'])
@@ -39,6 +38,9 @@ parser.add_argument('--early_stopping_pct', default=1.0)
 
 def coordinator(args):
 	config, dataconfig = get_standard_configs(args, base_path=args.base_path)
+
+	print(config)
+
 	#dataconfig.data.stddev = float(args.noise_level)
 	try:
 		save_root = get_standard_path(args, run_type="adapt", data_part=dataconfig.data.part)
@@ -53,7 +55,7 @@ def coordinator(args):
 		torch.manual_seed(config.seed) # for reproducible noise in simulate
 
 	sde = get_standard_sde(config=config)
-	score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type=args.model)
+	score = get_standard_score(config=config, sde=sde, use_ema=args.ema)
 	score = score.to(config.device).eval()
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
 	ray_trafo = ray_trafo.to(device=config.device)
@@ -98,7 +100,7 @@ def coordinator(args):
 		im.save(str(save_root / f'recon_{i}.png'))
 
 		
-		score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type=args.model)
+		score = get_standard_score(config=config, sde=sde, use_ema=args.ema)
 		score = score.to(config.device)
 		score.eval() 
 		

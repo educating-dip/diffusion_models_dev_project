@@ -30,3 +30,5 @@ results_noadapt_tmp/
 score_model/
 
 checkpoints/
+
+outputs/
