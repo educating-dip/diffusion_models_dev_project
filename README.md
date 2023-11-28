@@ -6,5 +6,4 @@ This repository contains the experiments for the Computed Tomography experiments
 
 TODO:
 1. simplify CG type and configs (@rb876)
-2. remove the hard coded path (@adenker)
-3. adjust the ellipses and wrap it into a SimulatedDataset class
+2. adjust the ellipses and wrap it into a SimulatedDataset class
