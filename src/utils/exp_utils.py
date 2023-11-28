@@ -11,6 +11,7 @@ from pathlib import Path
 from torch.utils.data import TensorDataset
 
 from .sde import VESDE, VPSDE, DDPM, _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES
+from .ema import ExponentialMovingAverage
 from ..third_party_models import UNetModel
 from ..dataset import EllipseDatasetFromDival, get_disk_dist_ellipses_dataset, get_walnut_data, AAPMDataset
 from ..physics import SimpleTrafo, get_walnut_2d_ray_trafo, simulate
@@ -22,8 +23,15 @@ def get_standard_score(config, sde, use_ema, load_model=True):
 
     score = create_model(**dict(config.model))
     if load_model:
-        score.load_state_dict(torch.load(config.ckpt_path))
+        if use_ema:
+            ema = ExponentialMovingAverage(score.parameters(), decay=0.999)
+            ema.load_state_dict(torch.load(os.path.join(config.ckpt_path)))
+            ema.copy_to(score.parameters())
+        else:
+            score.load_state_dict(torch.load(config.ckpt_path))
+        
         print(f'Model ckpt loaded from {config.ckpt_path}')
+
     score.convert_to_fp32()
     score.dtype = torch.float32
 

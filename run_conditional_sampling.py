@@ -9,13 +9,11 @@ from src import (get_standard_sde, PSNR, SSIM, get_standard_dataset, get_data_fr
 	get_standard_score, get_standard_sampler, get_standard_configs, get_standard_path) 
 
 parser = argparse.ArgumentParser(description='conditional sampling')
-parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=['walnut', 'lodopab', 'ellipses', 'mayo', 'aapm'])
-parser.add_argument('--model', default='openai_unet', help='select unet arch.', choices=['dds_unet', 'openai_unet'])
+parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=['walnut', 'ellipses', 'aapm'])
 parser.add_argument('--base_path', default='/localdata/AlexanderDenker/score_based_baseline', help='path to model configs')
 parser.add_argument('--model_learned_on', default='lodopab', help='model-checkpoint to load', choices=['lodopab', 'ellipses', 'aapm', "knee"])
 parser.add_argument('--version', default=1, help="version of the model")
 parser.add_argument('--method',  default='naive', choices=['naive', 'dps', 'dds'])
-parser.add_argument('--add_corrector_step', action='store_true')
 parser.add_argument('--ema', action='store_true')
 parser.add_argument('--num_steps', default=1000)
 parser.add_argument('--penalty', default=1, help='reg. penalty used for ``naive'' and ``dps'' only.')
@@ -43,7 +41,7 @@ def coordinator(args):
 	dataconfig.data.stddev = dataconfig.data.stddev if args.stddev == None else float(args.stddev)
 
 	sde = get_standard_sde(config=config)
-	score = get_standard_score(config=config, sde=sde, use_ema=args.ema, model_type=args.model)
+	score = get_standard_score(config=config, sde=sde, use_ema=args.ema)
 	score = score.to(config.device).eval()
 	ray_trafo = get_standard_ray_trafo(config=dataconfig)
 	ray_trafo = ray_trafo.to(device=config.device)

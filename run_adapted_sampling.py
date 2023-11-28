@@ -9,9 +9,9 @@ from src import (get_standard_sde, PSNR, SSIM, get_standard_dataset, get_data_fr
 	get_standard_score, get_standard_configs, get_standard_path, get_standard_adapted_sampler) 
 
 parser = argparse.ArgumentParser(description='conditional sampling')
-parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=['walnut', 'lodopab', 'ellipses', 'mayo', 'aapm'])
+parser.add_argument('--dataset', default='walnut', help='test-dataset', choices=['walnut', 'ellipses', 'aapm'])
 parser.add_argument('--base_path', default='/localdata/AlexanderDenker/score_based_baseline', help='path to model configs')
-parser.add_argument('--model_learned_on', default='lodopab', help='model-checkpoint to load', choices=['lodopab', 'ellipses', 'aapm'])
+parser.add_argument('--model_learned_on', default='ellipses', help='model-checkpoint to load', choices=['ellipses', 'aapm'])
 parser.add_argument('--method',  default='naive', choices=['naive', 'dps', 'dds'])
 parser.add_argument('--version', default=1, help="version of the model")
 parser.add_argument('--noise_level', default=0.01, help="rel. additive gaussian noise.")
@@ -99,7 +99,7 @@ def coordinator(args):
 		im = Image.fromarray(recon.cpu().squeeze().numpy()*255.).convert("L")
 		im.save(str(save_root / f'recon_{i}.png'))
 
-		
+		del(score)
 		score = get_standard_score(config=config, sde=sde, use_ema=args.ema)
 		score = score.to(config.device)
 		score.eval() 
